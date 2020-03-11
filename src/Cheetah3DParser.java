@@ -17,6 +17,9 @@ import java.util.List;
  *  Experimental code to read Cheetah 3D's .jas files which are written in the Apple Binary Plist format and
  *  then dump them out as an indented text file designed to show the hierarchy of the data.
  *
+ *  Author: Wayne Holder, 2020
+ *  License: MIT (https://opensource.org/licenses/MIT)
+ *
  * Notes 1: Vertices are defined as 4 float values, where the last float is always 0
  *
  *  Objects[1].vertex: Data (128 bytes)
