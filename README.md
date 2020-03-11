@@ -1,6 +1,6 @@
 ## **Cheetah3DParser**
 
-Cheetah3DParser is experimental code designed to read Cheetah 3D's `.jas` files and then dump them out as an indented text file designed to show the hierarchy of the data.  Since `.jas` files are encoded in Apple Binary pList format, Cheetah3DParser uses the [dd-plist](https://github.com/3breadt/dd-plist) library to read them.
+Cheetah3DParser is experimental code designed to read Cheetah 3D's `.jas` files and then dump them out as an indented text file designed to show the hierarchy of the data.  Since `.jas` files are encoded in [Apple Binary pList format](https://en.wikipedia.org/wiki/Property_list), Cheetah3DParser uses the wonderful [dd-plist](https://github.com/3breadt/dd-plist) library to read them.
 
 ### Caveats
 This code is a work in progress and is actually pretty ugly in places. mostly due to code I added that tries to annotate some of the data blocks in order to better show what the various values mean.
@@ -9,7 +9,7 @@ Also, this code does not currently support transcoding into other file formats, 
 
 ### Running Cheetah3DParser
 
-First, download the program's `.jar` file named `Cheetah3DParser.jar` [using this link](https://github.com/wholder/Cheetah3DParser/blob/master/out/artifacts/Cheetah3DParser_jar) anc copy it into a convenient folder that also contains some `.jas` files.  Then (assuming you have Java 8, or later installed on your computer), you can run the code from the command line, or terminal, like this:
+First, download the program's `.jar` file named `Cheetah3DParser.jar` [using this link](https://github.com/wholder/Cheetah3DParser/blob/master/out/artifacts/Cheetah3DParser_jar) and copy it into a convenient folder that also contains some `.jas` files.  Then (assuming you have Java 8, or later installed on your computer), you can run the code from the command line, or terminal, like this:
  ```
   java -jar Cheetah3DParser.jar <filename>
   ``` 
@@ -132,7 +132,7 @@ Polygons are defined by an array of `int` values where the start of a polygon is
 Notice the bytes making up each `int` are in big endian format!
 
 #### UV Coords
-UV Coords seem to follow the order in which the polygon faces are eunmerated in "`polygons`" Data item, such as:
+UV Coords seem to follow the order in which the polygon faces are eunmerated in the previously-mentioned Data item named "`polygons`", such as:
 ```
 Objects[1].uvcoords: Data (465504 bytes) - name: Dreyar
   // first pair of float values in each set is UV Coord set 0, 2nd is set 1
