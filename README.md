@@ -16,11 +16,11 @@ where `<filename>` is the name of a `.jas` file in the same directory.  Cheetah3
  ```
   java -jar Cheetah3DParser.jar -con <filename>
   ``` 
-By default, Cheetah3DParser does not display the raw data bytes for data it is able to decode into things like a list of vertices.  However, adding the "`-hex`" switch will force Cheetah3DParser to display data this as a series of hex bytes printed before the decoded values.  For example:
+By default, Cheetah3DParser does not display the raw data bytes for data it is able to decode into things like a list of vertices.  However, adding the "`-hex`" switch will force Cheetah3DParser to display data this as a series of hex bytes printed before the decoded values (note: the examples of decoded data blocks shown later in this file were printed with the "`-hex`" switch enabled in order to show how the data is decoded from the bytes.)  For example:
  ```
   java -jar Cheetah3DParser.jar -hex <filename>
   ``` 
-One technique I used in analyzing Cheetah3D files, was to save a version of a `.jas` file with a minor change, decode it and the unchanged `.jas` file using Cheetah3DParser and then use a text compile compare program, such as BBEdit, to show the differences between the two decoded files.  However, some `.jas` files, such as those that contain Material definitions, include numeric "id" values that can vary between the two files you're trying to compare.  However, adding the "-sid" (suppress id) switch will cause Cheetah3DParser to supress printing these values, which makes it much easier to compare the files.  For example:
+One technique I used in analyzing Cheetah3D files, was to save a version of a `.jas` file with a minor change, decode it and the unchanged `.jas` file using Cheetah3DParser and then use a text compile compare program, such as BBEdit, to show the differences between the two decoded files.  However, some `.jas` files, such as those that contain Material definitions, include numeric "id" values that can vary between the two files you're trying to compare.  However, adding the "`-sid`" (suppress id) switch will cause Cheetah3DParser to supress printing these values, which makes it much easier to compare the files.  For example:
  ```
   java -jar Cheetah3DParser.jar -sid <filename>
   ``` 
@@ -78,13 +78,13 @@ A line like this, for example:
  ```
     Render[0].tracks2[0].value: = 0 (0x0)
 ```
-can be read as indicating that the root key entry "Render" contains an Array where the 0th entry contains a Dictionary in which the key "tracks2" links to another Array where the 0th entry contains a key named "value" that links to an Integer with a value of 0.  The idea of presenting the information in this way is to enable you to trace any deeply embedded value back up to its root.
+can be read as indicating that the root key entry "`Render`" contains an Array where the 0th entry contains a Dictionary in which the key "`tracks2`" links to another Array where the 0th entry contains a key named "`value`" that links to an Integer with a value of 0.  The idea of presenting the information in this way is to enable you to trace any deeply embedded value back up to its root.
  
 ### Special Data Blocks
 In addition to the String, Integer, Real and Boolean value types, Cheetah 3D stores many of its more important data as blocks data in the form of byte arrays.  Each of these byte arrays can broken down into other kinds of data structures which can then contain lists of Vertex values, and so on.  The following sections go into more detail into how to decode these blocks.
 
 #### Vertices
-Vertices are defined as 4 `float` values contained in a Data block named "vertex".  The last `float` of each set of 4 is always set to 0.  Note: according to the author of Cheetah3d, Martin Wengenmayer, this 4th `float` value is used to support "soft point selections".
+Vertices are defined as 4 `float` values contained in a Data block named "`vertex`".  The last `float` of each set of 4 is always set to 0.  Note: according to the author of Cheetah3d, Martin Wengenmayer, this 4th `float` value is used to support "soft point selections".
 ```
 Objects[1].vertex: Data (128 bytes)
   BF 00 00 00 = -0.500000  <- index 0 X
@@ -100,7 +100,7 @@ Objects[1].vertex: Data (128 bytes)
 Notice the bytes making up each `float` are in big endian format!
 
 #### Vertices (alternate)
-Vertices are also stored as 3 `float` values prefixed by a 16 byte header in a section with a "`parameter`" value of "`pointArray`" and the byte data array with a key value of "`value`".  For the files I have tested, this data seems to exactly match the vertices saved under the "vertex" key (see above).  So, given that the data in "`pointArray`" uses little endian, rather than the big endian format used by other data structues in .jas files, I suggest using the "vertex" values as the source of vertex information:
+Vertices are also stored as 3 `float` values prefixed by a 16 byte header in a section with a "`parameter`" value of "`pointArray`" and the byte data array with a key value of "`value`".  For the files I have tested, this data seems to exactly match the vertices saved under the "vertex" key (see above).  So, given that the data in "`pointArray`" uses little endian, rather than the big endian format used by other data structues in .jas files, I suggest using the "`vertex`" values as the source of vertex information.
 ```
 Objects[1].tracks2[3].value: Data (112 bytes)
   // pointArray
