@@ -231,3 +231,4 @@ A [Java JDK or JVM](https://www.java.com/en/) or [OpenJDK](http://openjdk.java.n
 Cheetah3DParser uses the following Java code to perform some of its functions, or build this project:
 - [dd-plist](https://github.com/3breadt/dd-plist) is used to read the Apple plist format.
 - [IntelliJ IDEA from JetBrains](https://www.jetbrains.com/idea/) (my favorite development environment for Java coding. Thanks JetBrains!)
+- [Alan Scrivener](https://www.linkedin.com/in/alanscrivener) for assistance with 3D matrix math.
