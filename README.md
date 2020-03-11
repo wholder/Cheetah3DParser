@@ -100,7 +100,7 @@ Objects[1].vertex: Data (128 bytes)
 Notice the bytes making up each `float` are in big endian format!
 
 #### Vertices (alternate)
-Vertices are also stored as 3 `float` values prefixed by a 16 byte header in a section with a "`parameter`" value of "`pointArray`" and the byte data array with a key value of "`value`", like this:
+Vertices are also stored as 3 `float` values prefixed by a 16 byte header in a section with a "`parameter`" value of "`pointArray`" and the byte data array with a key value of "`value`".  For the files I have tested, this data seems to exactly match the vertices saved under the "vertex" key (see above).  So, given that the data in "`pointArray`" uses little endian, rather than the big endian format used by other data structues in .jas files, I suggest using the "vertex" values as the source of vertex information:
 ```
 Objects[1].tracks2[3].value: Data (112 bytes)
   // pointArray
@@ -219,10 +219,10 @@ Notice the bytes for each `int` and `float` are in big endian format!
 Each Keyframe value is labelled by "`name`" and "`parameter`" values in a preceding Dictionary that indicates the Joint name such as "`mixamorig:Hips`".  The "`parameter`" value can be "`position`", "`rotation`", or "`scale`".  See the code for more details on how this data is detected.
 
 #### Vertex Normals
-Note 10: Vertex normals do not appear to be saved in the `.jas` files I used as test examples.  However, it's possible there may be circumstances where vertex normals are stored.
+As near as I can determine, Vertex normals do not appear to be saved in the `.jas` files I used as test examples.  However, it's possible there may be circumstances where vertex normals are stored.
 
 #### Materials Info
-If materials are used, the key "`shaderTagMaterial`" contains an integer value that is the "Id" that links to an item in Dictionary in the "Materials3 subsection with a key value of "`ID`" and which links to an Integer value that matches the value of "`shaderTagMaterial`".  Note: hopefully I'll have time to add more info in the future as I continue my own analysis of `.jas` files using Cheetah3DParser.
+If materials are used, the key "`shaderTagMaterial`" contains an integer value that is used as a numeric "Id" that links to an item in a Dictionary in the "Materials3 subsection with a key value of "`ID`" and which links to an Integer value that matches the value of "`shaderTagMaterial`".  Note: hopefully I'll have time to add more info in the future as I continue my own analysis of `.jas` files using Cheetah3DParser.
 
 ### **Requirements**
 A [Java JDK or JVM](https://www.java.com/en/) or [OpenJDK](http://openjdk.java.net) version 8, or later must be installed in order to run the code.  There is also a [**Runnable JAR file**](https://github.com/wholder/Cheetah3DParser/blob/master/out/artifacts/Cheetah3DParser_jar) included in the checked in code that you can download and run without having to compile the source code.
