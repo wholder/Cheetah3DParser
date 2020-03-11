@@ -1,22 +1,31 @@
 ## **Cheetah3DParser**
 
-Cheetah3DParser is experimental code designed to read Cheetah 3D's `.jas` files and then dump them out as an indented text file designed to show the hierarchy of the data.  Since `.jas` files are encoded in [Apple Binary pList format](https://en.wikipedia.org/wiki/Property_list), Cheetah3DParser uses the wonderful [dd-plist](https://github.com/3breadt/dd-plist) library to read them.
+[Cheetah3D](https://www.cheetah3d.com) is a wonderful 3D modeling, rendering and animation program for the Mac written by Martin Wengenmayer.  Cheetah3DParser is experimental code designed to read Cheetah3D's `.jas` files and then dump them out as an indented text file designed to show the hierarchy of the data.  Since `.jas` files are encoded in [Apple Binary pList format](https://en.wikipedia.org/wiki/Property_list), Cheetah3DParser uses the [dd-plist](https://github.com/3breadt/dd-plist) library to read them.
 
 ### Caveats
-This code is a work in progress and is actually pretty ugly in places. mostly due to code I added that tries to annotate some of the data blocks in order to better show what the various values mean.
+This code is a work in progress intended mainly as a tool to enable you to view and study how Cheetah 3D stores its data.  As a consequence, the code is actually pretty ugly in places. mostly due to code I added that tries to annotate some of the data blocks in order to better show what the various values mean.  My eventual goal is to use what I've learned from writing Cheetah3DParser to write an importer for JavaFx that can read `.jas` files.  However, at the moment, this project is still in the planning stages.
 
-Also, this code does not currently support transcoding into other file formats, it's intended mainly as a tool to enable you to view and study how Cheetah 3D stores its data.  However, if you are clever enough, once you understand how Cheetah 3D stores its data, you should be able to see how to transcode it into other formats using the [dd-plist](https://github.com/3breadt/dd-plist) library.
-
+Also, while this document will attempt to explain how Cheetah3D stores data in `.jas` files, the information I present here is based only on my own research and may be flawed, or incomplete.  So, I encourage you to make your own study of one, or more .jas files using Cheetah3DParser and reach your own conclusions.
 ### Running Cheetah3DParser
 
-First, download the program's `.jar` file named `Cheetah3DParser.jar` [using this link](https://github.com/wholder/Cheetah3DParser/blob/master/out/artifacts/Cheetah3DParser_jar) and copy it into a convenient folder that also contains some `.jas` files.  Then (assuming you have Java 8, or later installed on your computer), you can run the code from the command line, or terminal, like this:
+First, download the program's executable `.jar` file named `Cheetah3DParser.jar` [using this link](https://github.com/wholder/Cheetah3DParser/blob/master/out/artifacts/Cheetah3DParser_jar) and copy it into a convenient folder that also contains some `.jas` files.  Then (assuming you have Java 8, or later installed on your computer), you can run the code from the command line, or terminal, like this:
  ```
   java -jar Cheetah3DParser.jar <filename>
   ``` 
-where `<filename>` is the name of a `.jas` file in the same directory.  Cheetah3DParser will then generate (in the same directory) a file named `xx.txt`, where "`xx`" is the name of the file (minus the .jas suffix) you entered for `<filename>`.  Optionally, you can redirect the output to the console by invoking Cheetah3DParser, like this:
+where `<filename>` is the name of a `.jas` file in the same directory.  Cheetah3DParser will then generate (in the same directory) a file named `xx.txt`, where "`xx`" is the name of the file (minus the `.jas` suffix) you entered for `<filename>`.  Optionally, you can redirect the output to the console by invoking Cheetah3DParser, like this:
  ```
-  java -jar Cheetah3DParser.jar <filename> console
+  java -jar Cheetah3DParser.jar -con <filename>
   ``` 
+By default, Cheetah3DParser does not display the raw data bytes for data it is able to decode into things like a list of vertices.  However, adding the "`-hex`" switch will force Cheetah3DParser to display data this as a series of hex bytes printed before the decoded values.  For example:
+ ```
+  java -jar Cheetah3DParser.jar -hex <filename>
+  ``` 
+One technique I used in analyzing Cheetah3D files, was to save a version of a `.jas` file with a minor change, decode it and the unchanged `.jas` file using Cheetah3DParser and then use a text compile compare program, such as BBEdit, to show the differences between the two decoded files.  However, some `.jas` files, such as those that contain Material definitions, include numeric "id" values that can vary between the two files you're trying to compare.  However, adding the "-sid" (suppress id) switch will cause Cheetah3DParser to supress printing these values, which makes it much easier to compare the files.  For example:
+ ```
+  java -jar Cheetah3DParser.jar -sid <filename>
+  ``` 
+Note: you can use multiple switches, but all switches should be delimited by a space and should all be specified before the filename.
+
 ### Understanding the pList Format
 The root of data is a Dictionary (a set of key/value pairs) object that contains a set of predefined keys that indicate various subsections in the the file.  The root keys are:
  ```
@@ -38,7 +47,7 @@ The value of each key/value pair in a Dictionary can contain another Dictionary,
 ```
 Array objects, in turn, can contain zero or more values where each value can be a Dictionary, an Array, or one of the value types.
 
-Cheetah3DParser enumerates this heirarchical structure as an indented series of lines.  The following shows how the beginning of a typical `.jas` files is displayed Cheetah3DParser:
+Cheetah3DParser enumerates this hierarchical structure as an indented series of lines.  The following shows how the beginning of a typical `.jas` files is displayed Cheetah3DParser:
 ```
 Render Array (2 items)
  Render[0] Dictionary (47 items)
@@ -69,13 +78,13 @@ A line like this, for example:
  ```
     Render[0].tracks2[0].value: = 0 (0x0)
 ```
-can be read as indicating that the root key entry "Render" contains an Array where the 0th entry contains a Dictionary in which the key "tracks2" links to another Array where the 0th entry contians a key named "value" that links to an Integer with a value of 0.  The idea of presenting the information in this way is to enable you to trace any deeply embedded value back up to its root.
+can be read as indicating that the root key entry "Render" contains an Array where the 0th entry contains a Dictionary in which the key "tracks2" links to another Array where the 0th entry contains a key named "value" that links to an Integer with a value of 0.  The idea of presenting the information in this way is to enable you to trace any deeply embedded value back up to its root.
  
 ### Special Data Blocks
-In addition to the String, Interger, Real and Boolean value types, Cheetah 3D stores many of its more important data as blocks data in the form of byte arrays.  Each of these byte arrays can broken down into other kinds of data structures which can then contain lists of Vertex values, and so on.  The following sections go into more detail into how to decode these blocks.
+In addition to the String, Integer, Real and Boolean value types, Cheetah 3D stores many of its more important data as blocks data in the form of byte arrays.  Each of these byte arrays can broken down into other kinds of data structures which can then contain lists of Vertex values, and so on.  The following sections go into more detail into how to decode these blocks.
 
 #### Vertices
-Vertices are defined as 4 `float` values contained in a Data block named "vertex".  The last `float` of seach set of 4 is always set to 0.
+Vertices are defined as 4 `float` values contained in a Data block named "vertex".  The last `float` of each set of 4 is always set to 0.  Note: according to the author of Cheetah3d, Martin Wengenmayer, this 4th `float` value is used to support "soft point selections".
 ```
 Objects[1].vertex: Data (128 bytes)
   BF 00 00 00 = -0.500000  <- index 0 X
@@ -114,7 +123,6 @@ Notice the bytes making up each `int` and `float` are in little endian format!
 #### Polygons
 Polygons are defined by an array of `int` values where the start of a polygon is indicated by a negative which, when made positive,  indicates the number of vertex indexes that will follow, such as:
 ```
-  vertexcount: Integer: 7397 (0x1CE5)
   polygons: Data (146088 bytes)
     FF FF FF FC = -4
     00 00 00 01 =  1
@@ -132,7 +140,7 @@ Polygons are defined by an array of `int` values where the start of a polygon is
 Notice the bytes making up each `int` are in big endian format!
 
 #### UV Coords
-UV Coords seem to follow the order in which the polygon faces are eunmerated in the previously-mentioned Data item named "`polygons`", such as:
+UV Coords seem to follow the order in which the polygon faces are enumerated in the previously-mentioned Data item named "`polygons`", such as:
 ```
 Objects[1].uvcoords: Data (465504 bytes) - name: Dreyar
   // first pair of float values in each set is UV Coord set 0, 2nd is set 1
@@ -188,7 +196,7 @@ Notice the bytes making up each `int` and `float` are in big endian format!
 Joints, when used, are linked together in a parent->children type tree structure where a key value called "`child`" contains a list of the child Joints attached to that Joint.
 
 #### Keyframe Values
-Keyframe data is stored as Data in a Dictionary item with the key "`keys`".  The first 4 bytes form an `int` value that inducates the number of keyframes in the block.  The next 4 bytes form an `int` that always seems to be set to a value of 27.  After this, each keyframe is encoded as a block of 27 bytes.  The first 24 bytes form 6, 32 bit `float` values with the 6th and last value of each block being the keyframe parameter.  The purpose of the other values in these blocks is currently unknown.  For example:
+Keyframe data is stored as Data in a Dictionary item with the key "`keys`".  The first 4 bytes form an `int` value that indicates the number of keyframes in the block.  The next 4 bytes form an `int` that always seems to be set to a value of 27.  After this, each keyframe is encoded as a block of 27 bytes.  The first 24 bytes form 6, 32 bit `float` values with the 6th and last value of each block being the keyframe parameter.  The purpose of the other values in these blocks is currently unknown.  For example:
 ```
   index[0]: Dictionary (3 items)
     keys: Data (872 bytes)
@@ -208,7 +216,7 @@ Keyframe data is stored as Data in a Dictionary item with the key "`keys`".  The
 
 Notice the bytes for each `int` and `float` are in big endian format!
 
-Each Keyframe value is labelled by "`name`" and "`parameter`" values in a preceeding Dictionary that indicates the Joint name such as "`mixamorig:Hips`".  The "`parameter`" value can be "`position`", "`rotation`", or "`scale`".  See the code for more details on how this data is detected.
+Each Keyframe value is labelled by "`name`" and "`parameter`" values in a preceding Dictionary that indicates the Joint name such as "`mixamorig:Hips`".  The "`parameter`" value can be "`position`", "`rotation`", or "`scale`".  See the code for more details on how this data is detected.
 
 #### Vertex Normals
 Note 10: Vertex normals do not appear to be saved in the `.jas` files I used as test examples.  However, it's possible there may be circumstances where vertex normals are stored.

@@ -155,20 +155,39 @@ import java.util.List;
  */
 
 public class Cheetah3DParser {
-  private static final boolean suppressId  = false;
-  private static final boolean showHexData = false;
-  private static final boolean useSystemOut = false;
-  private static DecimalFormat df  = new DecimalFormat("0.000000");
-  private static PrintStream   out = System.out;
+  private static final boolean  useSystemOut = false;
+  private static boolean        suppressId;
+  private static boolean        showHexData;
+  private static boolean        consoleOut;
+  private static DecimalFormat  df = new DecimalFormat("0.000000");
+  private static PrintStream    out = System.out;
 
   public static void main (String[] args) throws Exception {
     if (args.length > 0) {
-      int off = args[0].toLowerCase().indexOf(".jas");
-      if (off > 0) {
-        String inFile = args[0];
+      String inFile = null;
+      for (String arg : args) {
+        if (arg.startsWith("-")) {
+          switch (arg.substring(1)) {
+          case "sid":
+            suppressId = true;
+            break;
+          case "hex":
+            showHexData = true;
+            break;
+          case "con":
+            consoleOut = true;
+            break;
+          }
+        } else {
+          inFile = arg;
+          break;
+        }
+      }
+      int off;
+      if (inFile != null && (off = inFile.toLowerCase().indexOf(".jas")) > 0) {
         File file = new File(inFile);
         if (file.exists()) {
-          if (useSystemOut || args.length > 1 && "console".equals(args[1])) {
+          if (useSystemOut || consoleOut) {
             out = System.out;
           } else {
             String outFile = inFile.substring(0, off) + ".txt";
@@ -197,13 +216,13 @@ public class Cheetah3DParser {
             }
           }
         } else {
-          System.out.println("Unable to read file: " + args[0]);
+          System.out.println("Unable to read file: " + inFile);
         }
       } else {
         System.out.println("Expecting Cheetah 3D .jas file");
       }
     } else {
-      System.out.println("Usage: java -jar Cheetah3DParser.jar <file.jas>");
+      System.out.println("Usage: java -jar Cheetah3DParser.jar [optional switches] <file.jas>");
     }
   }
 
