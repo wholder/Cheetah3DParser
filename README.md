@@ -12,7 +12,40 @@ First, download the program's executable `.jar` file named `Cheetah3DParser.jar`
  ```
   java -jar Cheetah3DParser.jar <filename>
   ``` 
-where `<filename>` is the name of a `.jas` file in the same directory.  Cheetah3DParser will then generate (in the same directory) a file named `xx.txt`, where "`xx`" is the name of the file (minus the `.jas` suffix) you entered for `<filename>`.  Optionally, you can redirect the output to the console by invoking Cheetah3DParser, like this:
+where `<filename>` is the name of a `.jas` file in the same directory.  Cheetah3DParser will then generate (in the same directory) a file named `xx.txt`, where "`xx`" is the name of the file (minus the `.jas` suffix) you entered for `<filename>`.  
+Alternately, you can use the "`-info`" switch to instead dump some basic info to the `.txt` file, like this:
+ ```
+  java -jar Cheetah3DParser.jar -info <filename>
+  ``` 
+The output using the `-info` switch will look like this:
+ ```
+Takes:
+  Take
+currentTake: Take
+Materials:
+  Material0: 'Green'
+  diffColor: 0.501957  0.999963  0.031039  1.000000
+  reflColor: 0.000000  0.000000  0.000000  1.000000
+  emisColor: 0.000000  0.000000  0.000000  1.000000
+Objects:
+  Camera: CAMERA
+  Cube: NGON
+    vertexcount:  8
+    vertices:
+      -0.500000 -0.500000 -0.500000
+      -0.500000 -0.500000 -0.500000
+      ...
+    polygoncount: 6
+    faces:
+      0 1 2 3 
+      4 5 6 7 
+      ...
+    uvcoords: (set: 0)
+       0.000000  1.000000
+       0.000000  1.000000
+    ...
+ ```
+Optionally, if you don't want the output dumped to a file, you can redirect the output to the console by invoking Cheetah3DParser, like this:
  ```
   java -jar Cheetah3DParser.jar -con <filename>
   ``` 
@@ -24,7 +57,7 @@ One technique I used in analyzing Cheetah3D files, was to save a version of a `.
  ```
   java -jar Cheetah3DParser.jar -sid <filename>
   ``` 
-Note: you can use multiple switches, but all switches should be delimited by a space and should all be specified before the filename.
+Note: you can use multiple switches, but all switches should be delimited by a space and should all be specified before the `.jas` filename.
 
 ### Understanding the pList Format
 The root of data is a Dictionary (a set of key/value pairs) object that contains a set of predefined keys that indicate various subsections in the the file.  The root keys are:
@@ -100,7 +133,7 @@ Objects[1].vertex: Data (128 bytes)
 Notice the bytes making up each `float` are in big endian format!
 
 #### Vertices (alternate)
-Vertices are also stored as 3 `float` values prefixed by a 16 byte header in a section with a "`parameter`" value of "`pointArray`" and the byte data array with a key value of "`value`".  For the files I have tested, this data seems to exactly match the vertices saved under the "vertex" key (see above).  So, given that the data in "`pointArray`" uses little endian, rather than the big endian format used by other data structues in .jas files, I suggest using the "`vertex`" values as the source of vertex information.
+Vertices are also stored as 3 `float` values prefixed by a 16 byte header in a section with a "`parameter`" value of "`pointArray`" and the byte data array with a key value of "`value`".  For the files I have tested, this data seems to exactly match the vertices saved under the "vertex" key (see above).  So, given that the data in "`pointArray`" uses little endian, rather than the big endian format used by other data structures in .jas files, I suggest using the "`vertex`" values as the source of vertex information.
 ```
 Objects[1].tracks2[3].value: Data (112 bytes)
   // pointArray

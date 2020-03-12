@@ -11,7 +11,9 @@ import javax.xml.transform.stream.StreamResult;
 import java.io.*;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /*
  *  Experimental code to read Cheetah 3D's .jas files which are written in the Apple Binary Plist format and
@@ -158,6 +160,7 @@ public class Cheetah3DParser {
   private static final boolean  useSystemOut = false;
   private static boolean        suppressId;
   private static boolean        showHexData;
+  private static boolean        showInfo;
   private static boolean        consoleOut;
   private static DecimalFormat  df = new DecimalFormat("0.000000");
   private static PrintStream    out = System.out;
@@ -177,6 +180,9 @@ public class Cheetah3DParser {
           case "con":
             consoleOut = true;
             break;
+          case "info":
+            showInfo = true;
+            break;
           }
         } else {
           inFile = arg;
@@ -195,24 +201,121 @@ public class Cheetah3DParser {
             out = new PrintStream(bOut);
           }
           NSDictionary rootDict = (NSDictionary) PropertyListParser.parse(file);
-          for (String key : rootDict.allKeys()) {
-            NSObject obj = rootDict.objectForKey(key);
-            List<String> path = new ArrayList<>();
-            path.add(key);
-            switch (key) {
-            case "Render":
-            case "Takes":       // NSArray[2] prevTo, length, name, prevFrom
-            case "Materials3":  // NSArray[1] name = "dreyar_M", nodes
-            case "Dynamics":
-            case "Animation":   // NSDictionary(10) animFPS, animTimerPlay, etc.
-            case "Layer":       // NSArray[8] layerVisibleInRenderer, layerName, layerColor, etc.
-            case "Objects":     // NSArray[3] Camera, Dreyar, mixamorig:Hips
-              enumerate(path, new ArrayList<>(), 0, null, obj, null, " ");
-              break;
-            case "Version":
-              NSString nStr = (NSString) obj;
-              out.println("Version = '" + nStr.toString().trim() + "'");
-              break;
+          if (showInfo) {
+            // List available animation takes
+            NSDictionary takesDict = (NSDictionary) rootDict.get("Takes");
+            NSObject[] takes = ((NSArray) takesDict.get("takes")).getArray();
+            if (takes.length > 0) {
+              out.println("Takes:");
+              for (NSObject nsObject : takes) {
+                NSDictionary take = (NSDictionary) nsObject;
+                out.println("  " + take.get("name"));
+              }
+              if (takesDict .containsKey("currentTake")) {
+                out.println("currentTake: " + getString(takesDict, "currentTake"));
+              }
+            }
+            Map<Integer,Integer> materialIndexex = new HashMap<>();
+            // Get Materials
+            NSObject[] materials = ((NSArray) rootDict.get("Materials3")).getArray();
+            if (materials.length > 0) {
+              out.println("Materials:");
+              for (int ii = 0; ii < materials.length; ii++) {
+                NSDictionary matDict = (NSDictionary) materials[ii];
+                int id = getInt(matDict, "ID");
+                materialIndexex.put(id, ii);
+                out.println("  Material" + ii + ": '" + getString(matDict, "name") + "'");
+                NSObject[] nodes = ((NSArray) matDict.get("nodes")).getArray();
+                NSDictionary nodeDict = (NSDictionary) nodes[0];
+                out.println("  diffColor:" + floatArrayToString( getFloatArray(nodeDict, "diffColor")));
+                out.println("  reflColor:" + floatArrayToString( getFloatArray(nodeDict, "reflColor")));
+                out.println("  emisColor:" + floatArrayToString( getFloatArray(nodeDict, "emisColor")));
+              }
+            }
+            // List object data
+            NSObject[] objects = ((NSArray) rootDict.get("Objects")).getArray();
+            out.println("Objects:");
+            for (NSObject object : objects) {
+              NSDictionary objDict = (NSDictionary) object;
+              String objName = getString(objDict, "name");
+              String objType = getString(objDict, "type");
+              out.println("  " + objType + ": '" + objName + "'");
+              if ("NGON".equals(objType)) {
+                // Process NGON Tags
+                NSObject[] tags = ((NSArray) objDict.get("tags")).getArray();
+                for (NSObject tag : tags) {
+                  NSDictionary tagDict = (NSDictionary) tag;
+                  String tagType = getString(tagDict, "type");
+                  if ("SHADERTAG".equals(tagType)) {
+                    int materialId = getInt(tagDict, "shaderTagMaterial");
+                    if (materialIndexex.containsKey(materialId)) {
+                      out.println("    Material: " + materialIndexex.get(materialId));
+                    }
+                  }
+                }
+                // List vertices
+                int vertexCount = getInt(objDict, "vertexcount");
+                out.println("    vertexcount: " + vertexCount);
+                float[] vertices = getDataFloats(objDict, "vertex");
+                if (vertices.length > 0) {
+                  out.println("    vertices:");
+                  for (int jj = 0; jj < vertices.length; jj += 4) {
+                    out.println("      " + fString(vertices[jj]) + " " + fString(vertices[jj]) + " " + fString(vertices[jj]));
+                  }
+                }
+                // List polygons
+                int polyCount = getInt(objDict,"polygoncount" );
+                out.println("    polygoncount: " + polyCount);
+                int[] faces = getDataInts(objDict, "polygons");
+                if (faces.length > 0) {
+                  out.println("    faces:");
+                  int count = 0;
+                  for (int fVal : faces) {
+                    if (fVal < 0) {
+                      count = -fVal;
+                      out.print("      ");
+                    } else {
+                      out.print(fVal + " ");
+                      if (--count == 0) {
+                        out.println();
+                      }
+                    }
+                  }
+                }
+                // List UV Coords
+                float[] uvcoords = getDataFloats(objDict, "uvcoords");
+                if (uvcoords.length > 0) {
+                  int uvSet = getInt(objDict, "activeuvset");
+                  out.println("    uvcoords: (set: " + uvSet + ")");
+                  for (int ii = 0; ii < uvcoords.length; ii += 4) {
+                    int idx = ii + uvSet * 2;
+                    float u = uvcoords[idx];
+                    float v = uvcoords[idx + 1];
+                    out.println("      " + fString(u) + " " + fString(v));
+                  }
+                }
+              }
+            }
+          } else {
+            for (String key : rootDict.allKeys()) {
+              NSObject obj = rootDict.get(key);
+              List<String> path = new ArrayList<>();
+              path.add(key);
+              switch (key) {
+              case "Render":
+              case "Objects":     // NSArray[3] Camera, Dreyar, mixamorig:Hips
+              case "Takes":       // NSArray[2] prevTo, length, name, prevFrom
+              case "Materials3":  // NSArray[1] name = "dreyar_M", nodes
+              case "Dynamics":
+              case "Animation":   // NSDictionary(10) animFPS, animTimerPlay, etc.
+              case "Layer":       // NSArray[8] layerVisibleInRenderer, layerName, layerColor, etc.
+                enumerate(path, new ArrayList<>(), 0, null, obj, null, " ");
+                break;
+              case "Version":
+                NSString nStr = (NSString) obj;
+                out.println("Version = '" + nStr.toString().trim() + "'");
+                break;
+              }
             }
           }
         } else {
@@ -225,6 +328,56 @@ public class Cheetah3DParser {
       System.out.println("Usage: java -jar Cheetah3DParser.jar [optional switches] <file.jas>");
     }
   }
+
+  private static String floatArrayToString (float[] ary) {
+    return fString(ary[0]) + " " + fString(ary[1]) + " " + fString(ary[2]) + " " + fString(ary[3]);
+  }
+
+  private static int getInt (NSDictionary dict, String key) {
+    return ((NSNumber) dict.get(key)).intValue();
+  }
+
+  private static float getFloat (NSDictionary dict, String key) {
+    return ((NSNumber) dict.get(key)).floatValue();
+  }
+
+  private static boolean getBoolean (NSDictionary dict, String key) {
+    return ((NSNumber) dict.get(key)).boolValue();
+  }
+
+  private static String getString (NSDictionary dict, String key) {
+    return dict.get(key).toString();
+  }
+
+  private static float[] getFloatArray (NSDictionary dict, String key) {
+    NSObject[] ary = ((NSArray) dict.get(key)).getArray();
+    float[] fVals = new float[ary.length];
+    for (int ii = 0; ii < ary.length; ii++) {
+      NSNumber nbr = (NSNumber) ary[ii];
+      fVals[ii] = nbr.floatValue();
+    }
+    return fVals;
+  }
+
+  private static int[] getDataInts (NSDictionary dict, String key) {
+    NSData nData = (NSData) dict.get(key);
+    byte[] data = nData.bytes();
+    int[] ints = new int[data.length / 4];
+    for (int ii = 0; ii < data.length; ii += 4) {
+      ints[ii >> 2] = getInt(data, ii);
+    }
+    return ints;
+  }
+
+  private static float[] getDataFloats (NSDictionary dict, String key) {
+    int[] ints = getDataInts(dict, key);
+    float[] floats = new float[ints.length];
+    for (int ii = 0; ii < ints.length; ii++) {
+      floats[ii] = Float.intBitsToFloat(ints[ii]);
+    }
+    return floats;
+  }
+
 
   private static void enumerate (List<String> path, List<NSObject> pList, int lIdx, String dKey, NSObject cObj, NSObject pObj,
                                  String indent) throws Exception {
@@ -292,7 +445,7 @@ public class Cheetah3DParser {
         break;
       case 1:   // Real
         float fVal = nNum.floatValue();
-        out.println("= " + toString(fVal));
+        out.println("= " + fString(fVal));
         break;
       case 2:   // Boolean
         out.println("= " + nNum.boolValue());
@@ -344,8 +497,8 @@ public class Cheetah3DParser {
           for (int ii = 0; ii < 27 && idx < data.length; ii++) {
             printHex(data, indent, ii);
             if ((ii & 3) == 3) {
-              float fVal = toString(data, idx - 3);
-              out.print(toString(fVal));
+              float fVal = fString(data, idx - 3);
+              out.print(fString(fVal));
               if ((ii >> 2) == 5) {
                 out.print("  <- keyframe value, index " + ((idx - 31) / 27));
               }
@@ -389,7 +542,7 @@ public class Cheetah3DParser {
             if ((ii & 3) == 3 || ii == data.length - 1) {
               int fIndx = ii >> 2;
               if (isVertex || uvcoords) {
-                out.print(toString(toString(data, ii - 3)));
+                out.print(fString(fString(data, ii - 3)));
                 if (uvcoords) {
                   if ((fIndx & 3) == 0) {
                     out.print("  <- UV set 0, index " + (fIndx / 4));
@@ -403,7 +556,7 @@ public class Cheetah3DParser {
                   }
                 }
               } else if (isMatrix) {
-                out.print(toString(toString(data, ii - 3)));
+                out.print(fString(fString(data, ii - 3)));
                 int idx = ii >> 2;
                 out.print("  <- row " + (idx / 4) + ", col " + (idx % 4));
               } else if (isPolygons) {
@@ -414,7 +567,7 @@ public class Cheetah3DParser {
                 if ((fIndx & 1) == 0) {
                   out.print(String.format("%9d", getInt(data, ii - 3)) + "  <- vertex index");
                 } else {
-                  out.print(toString(toString(data, ii - 3)) + "  <- weight");
+                  out.print(fString(fString(data, ii - 3)) + "  <- weight");
                 }
               } else if (isPointArray) {
                 // Note: litle endian format
@@ -428,7 +581,7 @@ public class Cheetah3DParser {
                     out.print("  <- number of floats/point");
                   }
                 } else {
-                  out.print(toString(Float.intBitsToFloat(intVal)));
+                  out.print(fString(Float.intBitsToFloat(intVal)));
                   if ((idx - 4) % 3 == 0) {
                     out.print("  <- index " + ((idx - 4) / 3));
                   }
@@ -480,7 +633,7 @@ public class Cheetah3DParser {
     return buf.toString();
   }
 
-  private static String toString (float fVal) {
+  private static String fString (float fVal) {
     fVal = fVal == -0 ? 0 : fVal;
     if (Math.abs(fVal) > 100000) {
       return String.format((fVal >= 0 ? " %e" : "%e"), fVal);
@@ -494,7 +647,7 @@ public class Cheetah3DParser {
     return data[idx] << 24 | (data[idx + 1] & 0xFF) << 16 | (data[idx + 2] & 0xFF) << 8 | (data[idx + 3] & 0xFF);
   }
 
-  private static float toString (byte[] data, int idx) {
+  private static float fString (byte[] data, int idx) {
     return Float.intBitsToFloat(getInt(data, idx));
   }
 
