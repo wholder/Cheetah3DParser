@@ -10,10 +10,7 @@ import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import java.io.*;
 import java.text.DecimalFormat;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /*
  *  Experimental code to read Cheetah 3D's .jas files which are written in the Apple Binary Plist format and
@@ -157,13 +154,20 @@ import java.util.Map;
  */
 
 public class Cheetah3DParser {
-  private static final boolean  useSystemOut = false;
-  private static boolean        suppressId;
-  private static boolean        showHexData;
-  private static boolean        showInfo;
-  private static boolean        consoleOut;
-  private static DecimalFormat  df = new DecimalFormat("0.000000");
-  private static PrintStream    out = System.out;
+  private static final boolean              useSystemOut = false;
+  private static       boolean              suppressId;
+  private static       boolean              showHexData;
+  private static       boolean              showInfo;
+  private static       boolean              consoleOut;
+  private static       DecimalFormat        df           = new DecimalFormat("0.000000");
+  private static       PrintStream          out          = System.out;
+  private static       Map<String, Integer> parmOrder    = new HashMap<>();
+
+  static {
+    parmOrder.put("position", 0);
+    parmOrder.put("rotation", 1);
+    parmOrder.put("scale", 2);
+  }
 
   public static void main (String[] args) throws Exception {
     if (args.length > 0) {
@@ -211,11 +215,11 @@ public class Cheetah3DParser {
                 NSDictionary take = (NSDictionary) nsObject;
                 out.println("  " + take.get("name"));
               }
-              if (takesDict .containsKey("currentTake")) {
+              if (takesDict.containsKey("currentTake")) {
                 out.println("currentTake: " + getString(takesDict, "currentTake"));
               }
             }
-            Map<Integer,Integer> materialIndexex = new HashMap<>();
+            Map<Integer, Integer> materialIndexex = new HashMap<>();
             // Get Materials
             NSObject[] materials = ((NSArray) rootDict.get("Materials3")).getArray();
             if (materials.length > 0) {
@@ -226,75 +230,74 @@ public class Cheetah3DParser {
                 materialIndexex.put(id, ii);
                 out.println("  Material" + ii + ": '" + getString(matDict, "name") + "'");
                 NSObject[] nodes = ((NSArray) matDict.get("nodes")).getArray();
-                NSDictionary nodeDict = (NSDictionary) nodes[0];
-                out.println("  diffColor:" + floatArrayToString( getFloatArray(nodeDict, "diffColor")));
-                out.println("  reflColor:" + floatArrayToString( getFloatArray(nodeDict, "reflColor")));
-                out.println("  emisColor:" + floatArrayToString( getFloatArray(nodeDict, "emisColor")));
-              }
-            }
-            // List object data
-            NSObject[] objects = ((NSArray) rootDict.get("Objects")).getArray();
-            out.println("Objects:");
-            for (NSObject object : objects) {
-              NSDictionary objDict = (NSDictionary) object;
-              String objName = getString(objDict, "name");
-              String objType = getString(objDict, "type");
-              out.println("  " + objType + ": '" + objName + "'");
-              if ("NGON".equals(objType)) {
-                // Process NGON Tags
-                NSObject[] tags = ((NSArray) objDict.get("tags")).getArray();
-                for (NSObject tag : tags) {
-                  NSDictionary tagDict = (NSDictionary) tag;
-                  String tagType = getString(tagDict, "type");
-                  if ("SHADERTAG".equals(tagType)) {
-                    int materialId = getInt(tagDict, "shaderTagMaterial");
-                    if (materialIndexex.containsKey(materialId)) {
-                      out.println("    Material: " + materialIndexex.get(materialId));
-                    }
-                  }
-                }
-                // List vertices
-                int vertexCount = getInt(objDict, "vertexcount");
-                out.println("    vertexcount: " + vertexCount);
-                float[] vertices = getDataFloats(objDict, "vertex");
-                if (vertices.length > 0) {
-                  out.println("    vertices:");
-                  for (int jj = 0; jj < vertices.length; jj += 4) {
-                    out.println("      " + fString(vertices[jj]) + " " + fString(vertices[jj]) + " " + fString(vertices[jj]));
-                  }
-                }
-                // List polygons
-                int polyCount = getInt(objDict,"polygoncount" );
-                out.println("    polygoncount: " + polyCount);
-                int[] faces = getDataInts(objDict, "polygons");
-                if (faces.length > 0) {
-                  out.println("    faces:");
-                  int count = 0;
-                  for (int fVal : faces) {
-                    if (fVal < 0) {
-                      count = -fVal;
-                      out.print("      ");
-                    } else {
-                      out.print(fVal + " ");
-                      if (--count == 0) {
-                        out.println();
+                for (int jj = 0; jj < nodes.length; jj++) {
+                  out.println("  node: " + jj);
+                  NSObject node = nodes[jj];
+                  NSDictionary nodeDict = (NSDictionary) node;
+                  if (nodeDict.containsKey("tracks2")) {
+                    NSObject[] tracks2 = ((NSArray) nodeDict.get("tracks2")).getArray();
+                    for (NSObject item : tracks2) {
+                      NSDictionary itemDict = (NSDictionary) item;
+                      String parmName = getString(itemDict, "parameter");
+                      switch (parmName) {
+                      case "background":
+                      case "color":
+                      case "diffColor":
+                      case "emisColor":
+                      case "mixcolor":
+                      case "reflColor":
+                      case "specColor":
+                      case "transColor":
+                        out.println("    " + pad(parmName + ":", 14) + floatArrayToString(getFloatArray(nodeDict, parmName)));
+                        break;
+                      case "bump":
+                      case "intensity":
+                      case "mix":
+                      case "specSize":
+                      case "transBlur":
+                        out.println("    " + pad(parmName + ":", 14) + getFloat(nodeDict, parmName));
+                        break;
+                      case "reflBlur":
+                        break;
+                      case "bumpType":
+                      case "filterType":
+                      case "reflSamples":
+                      case "sample":
+                      case "transSamples":
+                        out.println("    " + pad(parmName + ":", 14) + getInt(nodeDict, parmName));
+                        break;
+                      case "reflFresnel":
+                      case "tileU":
+                      case "tileV":
+                      case "transUseAlpha":
+                        out.println("    " + pad(parmName + ":", 14) + getBoolean(nodeDict, parmName));
+                        break;
+                      case "texture":
+                        out.println("    " + pad(parmName + ":", 14) + getString(nodeDict, parmName));
+                        break;
+                      case "position":
+                      case "scale":
+                        float[] pVals = getFloatArray(nodeDict, parmName);
+                        out.println("    " + pad(parmName + ":", 14) + fmtFloat(pVals[0]) + " " + fmtFloat(pVals[1]));
+                        break;
                       }
                     }
                   }
-                }
-                // List UV Coords
-                float[] uvcoords = getDataFloats(objDict, "uvcoords");
-                if (uvcoords.length > 0) {
-                  int uvSet = getInt(objDict, "activeuvset");
-                  out.println("    uvcoords: (set: " + uvSet + ")");
-                  for (int ii = 0; ii < uvcoords.length; ii += 4) {
-                    int idx = ii + uvSet * 2;
-                    float u = uvcoords[idx];
-                    float v = uvcoords[idx + 1];
-                    out.println("      " + fString(u) + " " + fString(v));
+                  if (nodeDict.containsKey("diffColor")) {
+                    //out.println("  diffColor:" + floatArrayToString(getFloatArray(nodeDict, "diffColor")));
+                    //out.println("  reflColor:" + floatArrayToString(getFloatArray(nodeDict, "reflColor")));
+                    //out.println("  emisColor:" + floatArrayToString(getFloatArray(nodeDict, "emisColor")));
+                  } else if (nodeDict.containsKey("texture")) {
+
                   }
                 }
               }
+            }
+            if (true) {
+              // List object data
+              NSObject[] objects = ((NSArray) rootDict.get("Objects")).getArray();
+              out.println("Objects:");
+              processObjects(objects, materialIndexex, "  ");
             }
           } else {
             for (String key : rootDict.allKeys()) {
@@ -321,6 +324,8 @@ public class Cheetah3DParser {
         } else {
           System.out.println("Unable to read file: " + inFile);
         }
+        out.flush();
+        out.close();
       } else {
         System.out.println("Expecting Cheetah 3D .jas file");
       }
@@ -329,8 +334,169 @@ public class Cheetah3DParser {
     }
   }
 
+  private static void processChildren (NSObject[] children, Map<Integer, Integer> matIdxes, String indent) {
+    for (NSObject child : children) {
+      NSDictionary childDict = (NSDictionary) child;
+      processObjects(children, matIdxes, indent + "  ");
+      if (childDict.containsKey("childs")) {
+        processChildren(((NSArray) childDict.get("childs")).getArray(), matIdxes, indent + "  ");
+      }
+    }
+  }
+
+  private static void processObjects (NSObject[] objects, Map<Integer, Integer> matIdxes, String indent) {
+    for (NSObject object : objects) {
+      NSDictionary objDict = (NSDictionary) object;
+      String objName = getString(objDict, "name");
+      String objType = getString(objDict, "type");
+      out.println(indent + objType + ": '" + objName + "'");
+      if ("NGON".equals(objType)) {
+        // Process NGON Tags
+        NSObject[] tags = ((NSArray) objDict.get("tags")).getArray();
+        for (NSObject tag : tags) {
+          NSDictionary tagDict = (NSDictionary) tag;
+          String tagType = getString(tagDict, "type");
+          if ("SHADERTAG".equals(tagType)) {
+            int materialId = getInt(tagDict, "shaderTagMaterial");
+            if (matIdxes.containsKey(materialId)) {
+              out.println(indent + "  Material: " + matIdxes.get(materialId));
+            }
+          }
+        }
+        // List vertices
+        int vertexCount = getInt(objDict, "vertexcount");
+        out.println(indent + "  vertexcount: " + vertexCount);
+        float[] vertices = getDataFloats(objDict, "vertex");
+        if (vertices.length > 0) {
+          out.println(indent + "  vertices:");
+          for (int jj = 0; jj < vertices.length; jj += 4) {
+            out.println(indent + "    " + fmtFloat(vertices[jj]) + " " + fmtFloat(vertices[jj]) + " " +
+                            fmtFloat(vertices[jj]));
+          }
+        }
+        // List polygons
+        int polyCount = getInt(objDict, "polygoncount");
+        out.println(indent + "  polygoncount: " + polyCount);
+        int[] faces = getDataInts(objDict, "polygons");
+        if (faces.length > 0) {
+          out.println(indent + "  faces:");
+          int count = 0;
+          for (int fVal : faces) {
+            if (fVal < 0) {
+              count = -fVal;
+              out.print(indent + "    ");
+            } else {
+              out.print(fVal + " ");
+              if (--count == 0) {
+                out.println();
+              }
+            }
+          }
+        }
+        // List UV Coords
+        float[] uvcoords = getDataFloats(objDict, "uvcoords");
+        if (uvcoords.length > 0) {
+          int uvSet = getInt(objDict, "activeuvset");
+          out.println(indent + "  uvcoords: (set: " + uvSet + ")");
+          for (int ii = 0; ii < uvcoords.length; ii += 4) {
+            int idx = ii + uvSet * 2;
+            float u = uvcoords[idx];
+            float v = uvcoords[idx + 1];
+            out.println(indent + "    " + fmtFloat(u) + " " + fmtFloat(v));
+          }
+        }
+        // Extract and reorder animation keyframes, if any
+        processKeyframes(objDict, indent);
+      } else if ("FOLDER".equals(objType)) {
+        NSObject[] children = ((NSArray) objDict.get("childs")).getArray();
+        processChildren(children, matIdxes, indent + "  ");
+      } else if ("JOINT".equals(objType)) {
+        processKeyframes(objDict, indent);
+      }
+    }
+  }
+
+  private static void processKeyframes (NSDictionary objDict, String indent) {
+    if (objDict.containsKey("tracks2")) {
+      Map<String, List<Float[][]>> takeMap = new LinkedHashMap<>();
+      NSObject[] tracks2 = ((NSArray) objDict.get("tracks2")).getArray();
+      out.println(indent + "  Base Position:");
+      for (NSObject nsObject : tracks2) {
+        NSDictionary tracks2Dict = (NSDictionary) nsObject;
+        String parameter = getString(tracks2Dict, "parameter");
+        if ("position".equals(parameter) || "rotation".equals(parameter) || "scale".equals(parameter)) {
+          int parmIdx = parmOrder.get(parameter);
+          float[] val = getFloatArray(tracks2Dict, "value");
+          out.println(indent + "    " + pad(parameter + ": ", 10) + fmtFloat(val[0]) + " " + fmtFloat(val[0]) + " " +
+                          fmtFloat(val[0]));
+          NSObject[] pTakes = ((NSArray) tracks2Dict.get("takes")).getArray();
+          for (NSObject pTake : pTakes) {
+            NSDictionary take = (NSDictionary) pTake;
+            String takeName = getString(take, "name");
+            List<Float[][]> takeList;
+            if (!takeMap.containsKey(takeName)) {
+              takeMap.put(takeName, takeList = new ArrayList<>());
+            } else {
+              takeList = takeMap.get(takeName);
+            }
+            NSObject[] fcurves = ((NSArray) take.get("fcurves")).getArray();
+            for (int kk = 0; kk < fcurves.length; kk++) {
+              NSDictionary fcVals = (NSDictionary) fcurves[kk];
+              byte[] data = getDataBytes(fcVals, "keys");
+              int numKeyframes = getInt(data, 0);
+              for (int ll = 0; ll < numKeyframes; ll++) {
+                Float[][] parmValues;
+                if (ll >= takeList.size()) {
+                  parmValues = new Float[3][3];      // position, rotation, scale
+                  takeList.add(parmValues);
+                } else {
+                  parmValues = takeList.get(ll);
+                }
+                int kIdx = ll * 27 + 8 + 20;
+                float kVal = getFloat(data, kIdx);
+                parmValues[parmIdx][kk] = kVal;
+              }
+            }
+          }
+        }
+      }
+      // Print Keyframes
+      String[] parmNames = new String[] {"position", "rotation", "scale"};
+      for (String key : takeMap.keySet()) {
+        out.println(indent + "  Take: " + key);
+        List<Float[][]> tList = takeMap.get(key);
+        int num = 0;
+        for (Float[][] keyframe : tList) {
+          out.println(indent + "    keyframe: " + num++);
+          for (int ii = 0; ii < keyframe.length; ii++) {
+            String parmName = parmNames[ii];
+            Float[] val = keyframe[ii];
+            // Filling any missing values
+            if (val[0] == null || val[1] == null || val[2] == null) {
+              if ("scale".equals(parmName)) {
+                val = new Float[] {1.0f, 1.0f, 1.0f};
+              } else {
+                val = new Float[] {0.0f, 0.0f, 0.0f};
+              }
+            }
+            out.print(indent + "      " + pad(parmName + ": ", 10));
+            out.println(fmtFloat(val[0]) + " " + fmtFloat(val[1]) + " " + fmtFloat(val[2]));
+          }
+        }
+      }
+    }
+  }
+
+  private static String pad (String str, int minLength) {
+    StringBuilder strBuilder = new StringBuilder(str);
+    while (strBuilder.length() < minLength) {
+      strBuilder.append(" ");
+    }
+    return strBuilder.toString();
+  }
+
   private static String floatArrayToString (float[] ary) {
-    return fString(ary[0]) + " " + fString(ary[1]) + " " + fString(ary[2]) + " " + fString(ary[3]);
+    return fmtFloat(ary[0]) + " " + fmtFloat(ary[1]) + " " + fmtFloat(ary[2]) + " " + fmtFloat(ary[3]);
   }
 
   private static int getInt (NSDictionary dict, String key) {
@@ -360,8 +526,7 @@ public class Cheetah3DParser {
   }
 
   private static int[] getDataInts (NSDictionary dict, String key) {
-    NSData nData = (NSData) dict.get(key);
-    byte[] data = nData.bytes();
+    byte[] data = getDataBytes(dict, key);
     int[] ints = new int[data.length / 4];
     for (int ii = 0; ii < data.length; ii += 4) {
       ints[ii >> 2] = getInt(data, ii);
@@ -378,6 +543,10 @@ public class Cheetah3DParser {
     return floats;
   }
 
+  private static byte[] getDataBytes (NSDictionary dict, String key) {
+    NSData nData = (NSData) dict.get(key);
+    return nData.bytes();
+  }
 
   private static void enumerate (List<String> path, List<NSObject> pList, int lIdx, String dKey, NSObject cObj, NSObject pObj,
                                  String indent) throws Exception {
@@ -445,7 +614,7 @@ public class Cheetah3DParser {
         break;
       case 1:   // Real
         float fVal = nNum.floatValue();
-        out.println("= " + fString(fVal));
+        out.println("= " + fmtFloat(fVal));
         break;
       case 2:   // Boolean
         out.println("= " + nNum.boolValue());
@@ -497,8 +666,8 @@ public class Cheetah3DParser {
           for (int ii = 0; ii < 27 && idx < data.length; ii++) {
             printHex(data, indent, ii);
             if ((ii & 3) == 3) {
-              float fVal = fString(data, idx - 3);
-              out.print(fString(fVal));
+              float fVal = getFloat(data, idx - 3);
+              out.print(fmtFloat(fVal));
               if ((ii >> 2) == 5) {
                 out.print("  <- keyframe value, index " + ((idx - 31) / 27));
               }
@@ -542,7 +711,7 @@ public class Cheetah3DParser {
             if ((ii & 3) == 3 || ii == data.length - 1) {
               int fIndx = ii >> 2;
               if (isVertex || uvcoords) {
-                out.print(fString(fString(data, ii - 3)));
+                out.print(fmtFloat(getFloat(data, ii - 3)));
                 if (uvcoords) {
                   if ((fIndx & 3) == 0) {
                     out.print("  <- UV set 0, index " + (fIndx / 4));
@@ -556,7 +725,7 @@ public class Cheetah3DParser {
                   }
                 }
               } else if (isMatrix) {
-                out.print(fString(fString(data, ii - 3)));
+                out.print(fmtFloat(getFloat(data, ii - 3)));
                 int idx = ii >> 2;
                 out.print("  <- row " + (idx / 4) + ", col " + (idx % 4));
               } else if (isPolygons) {
@@ -567,7 +736,7 @@ public class Cheetah3DParser {
                 if ((fIndx & 1) == 0) {
                   out.print(String.format("%9d", getInt(data, ii - 3)) + "  <- vertex index");
                 } else {
-                  out.print(fString(fString(data, ii - 3)) + "  <- weight");
+                  out.print(fmtFloat(getFloat(data, ii - 3)) + "  <- weight");
                 }
               } else if (isPointArray) {
                 // Note: litle endian format
@@ -581,7 +750,7 @@ public class Cheetah3DParser {
                     out.print("  <- number of floats/point");
                   }
                 } else {
-                  out.print(fString(Float.intBitsToFloat(intVal)));
+                  out.print(fmtFloat(Float.intBitsToFloat(intVal)));
                   if ((idx - 4) % 3 == 0) {
                     out.print("  <- index " + ((idx - 4) / 3));
                   }
@@ -633,7 +802,7 @@ public class Cheetah3DParser {
     return buf.toString();
   }
 
-  private static String fString (float fVal) {
+  private static String fmtFloat (float fVal) {
     fVal = fVal == -0 ? 0 : fVal;
     if (Math.abs(fVal) > 100000) {
       return String.format((fVal >= 0 ? " %e" : "%e"), fVal);
@@ -647,7 +816,7 @@ public class Cheetah3DParser {
     return data[idx] << 24 | (data[idx + 1] & 0xFF) << 16 | (data[idx + 2] & 0xFF) << 8 | (data[idx + 3] & 0xFF);
   }
 
-  private static float fString (byte[] data, int idx) {
+  private static float getFloat (byte[] data, int idx) {
     return Float.intBitsToFloat(getInt(data, idx));
   }
 

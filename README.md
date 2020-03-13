@@ -13,7 +13,7 @@ First, download the program's executable `.jar` file named `Cheetah3DParser.jar`
   java -jar Cheetah3DParser.jar <filename>
   ``` 
 where `<filename>` is the name of a `.jas` file in the same directory.  Cheetah3DParser will then generate (in the same directory) a file named `xx.txt`, where "`xx`" is the name of the file (minus the `.jas` suffix) you entered for `<filename>`.  
-Alternately, you can use the "`-info`" switch to instead dump some basic info to the `.txt` file, like this:
+Alternately, you can use the "`-info`" switch to tell Cheetah3DParser to attempt to analyze the file and dump the results into the output `.txt` file, like this:
  ```
   java -jar Cheetah3DParser.jar -info <filename>
   ``` 
@@ -44,7 +44,17 @@ Objects:
        0.000000  1.000000
        0.000000  1.000000
     ...
- ```
+     Base Position:
+       position:  0.000000  0.000000  0.000000
+       rotation:  0.000000  0.000000  0.000000
+       scale:     1.000000  1.000000  1.000000
+     Take: Take
+       keyframe: 0
+         position:  0.000000  0.000000  0.000000
+         rotation:  0.000000  0.000000  0.000000
+         scale:     1.000000  1.000000  1.000000
+       ...
+```
 Optionally, if you don't want the output dumped to a file, you can redirect the output to the console by invoking Cheetah3DParser, like this:
  ```
   java -jar Cheetah3DParser.jar -con <filename>
@@ -193,7 +203,7 @@ Notice the bytes making up each float are in big endian format!
 Also, the 2nd value, V, is reversed from how it's used in OBJ files, so you must subtract this value from 1.0 to get the unreversed value.
 
 #### Joints
-Joint info is contained in the Array, which is linked to the "baseData" key in an Dictionary object, like this:
+Joint info is contained in the Array, which is linked to the "baseData" key in a Dictionary object, like this:
 ```
   baseData: Dictionary (1 items)
   linkData: Array (52 items)
