@@ -260,7 +260,7 @@ public class Cheetah3DParser {
                       case "reflBlur":
                         break;
                       case "bumpType":
-                      case "filterType":
+                      case "filtertype":
                       case "reflSamples":
                       case "sample":
                       case "transSamples":
@@ -293,7 +293,7 @@ public class Cheetah3DParser {
                 }
               }
             }
-            if (true) {
+            if (false) {
               // List object data
               NSObject[] objects = ((NSArray) rootDict.get("Objects")).getArray();
               out.println("Objects:");
