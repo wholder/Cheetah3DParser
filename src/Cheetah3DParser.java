@@ -293,7 +293,7 @@ public class Cheetah3DParser {
                 }
               }
             }
-            if (false) {
+            if (true) {
               // List object data
               NSObject[] objects = ((NSArray) rootDict.get("Objects")).getArray();
               out.println("Objects:");
