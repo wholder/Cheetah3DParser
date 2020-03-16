@@ -244,6 +244,24 @@ public class Cheetah3DParser {
                   String matXml = getString(baseDict, "xmlDef");
                   Document doc = parseXml(matXml);
                   if (jj == 0) {
+                    out.println("    " + pad("Diffuse:", 16) + floatArrayToString(getFloatArray(nodeDict, "diffColor")));
+                    out.println("    " + pad("Specular:", 16) + floatArrayToString(getFloatArray(nodeDict, "specColor")));
+                    out.println("    " + pad("Specular Size:", 16) + getFloat(nodeDict, "specSize"));
+                    out.println("    " + pad("Reflection:", 16) + floatArrayToString(getFloatArray(nodeDict, "reflColor")));
+                    out.println("    " + pad("Ref. Blur:", 16) + getFloat(nodeDict, "reflBlur"));
+                    out.println("    " + pad("Ref. Samples:", 16) + getInt(nodeDict, "reflSamples"));
+                    out.println("    " + pad("Fresnel:", 16) + getBoolean(nodeDict, "reflFresnel"));
+                    out.println("    " + pad("Transparency:", 16) + floatArrayToString(getFloatArray(nodeDict, "transColor")));
+                    out.println("    " + pad("Trans. Blur:", 16) + getFloat(nodeDict, "transBlur"));
+                    out.println("    " + pad("Trans. Samples:", 16) + getInt(nodeDict, "transSamples"));
+                    out.println("    " + pad("Use Alpha:", 16) + getBoolean(nodeDict, "transUseAlpha"));
+                    out.println("    " + pad("Emissive:", 16) + floatArrayToString(getFloatArray(nodeDict, "emisColor")));
+                    String[] bumpType = new String[] {"bumpHeight", "bumpNormalYPlus", "bumpNormalYMinus"};
+                    out.println("    " + pad("Bump Type:", 16) + bumpType[getInt(nodeDict, "bumpType")]);
+
+                    //     transEta
+                    //   bump
+
                     Node cNode = getChildNode(doc, "param");
                     NodeList xmlNodes = cNode != null ? cNode.getChildNodes() : null;
                     if (xmlNodes != null) {
@@ -267,54 +285,41 @@ public class Cheetah3DParser {
                       Node idNode = iAttrs.getNamedItem("id");
                       String nodeId = idNode.getNodeValue();
                       String nodeName =idToTexName.get(nodeId);
-                      out.println("    " + pad(nodeName + ":", 16) + floatArrayToString(getFloatArray(nodeDict, "color")));
-                    }
-                    if (nodeDict.containsKey("tracks2")) {
-                      NSObject[] tracks2 = ((NSArray) nodeDict.get("tracks2")).getArray();
-                      for (NSObject item : tracks2) {
-                        NSDictionary itemDict = (NSDictionary) item;
-                        String parmName = getString(itemDict, "parameter");
-                        switch (parmName) {
-                        case "background":
-                        case "color":
-                        case "diffColor":
-                        case "emisColor":
-                        case "mixcolor":
-                        case "reflColor":
-                        case "specColor":
-                        case "transColor":
-                          out.println("      " + pad(parmName + ":", 14) + floatArrayToString(getFloatArray(nodeDict, parmName)));
-                          break;
-                        case "bump":
-                        case "intensity":
-                        case "mix":
-                        case "specSize":
-                        case "transBlur":
-                          out.println("      " + pad(parmName + ":", 14) + getFloat(nodeDict, parmName));
-                          break;
-                        case "reflBlur":
-                          break;
-                        case "bumpType":
-                        case "filtertype":
-                        case "reflSamples":
-                        case "sample":
-                        case "transSamples":
-                          out.println("      " + pad(parmName + ":", 14) + getInt(nodeDict, parmName));
-                          break;
-                        case "reflFresnel":
-                        case "tileU":
-                        case "tileV":
-                        case "transUseAlpha":
-                          out.println("      " + pad(parmName + ":", 14) + getBoolean(nodeDict, parmName));
-                          break;
-                        case "texture":
-                          out.println("      " + pad(parmName + ":", 14) + getString(nodeDict, parmName));
-                          break;
-                        case "position":
-                        case "scale":
-                          float[] pVals = getFloatArray(nodeDict, parmName);
-                          out.println("      " + pad(parmName + ":", 14) + fmtFloat(pVals[0]) + " " + fmtFloat(pVals[1]));
-                          break;
+                      out.println("    " + pad("Texture:", 16) + getString(nodeDict, "texture"));
+                      if (nodeDict.containsKey("tracks2")) {
+                        NSObject[] tracks2 = ((NSArray) nodeDict.get("tracks2")).getArray();
+                        Map<String,Object> texParmMap = new HashMap<>();
+                        for (NSObject item : tracks2) {
+                          NSDictionary itemDict = (NSDictionary) item;
+                          String parmName = getString(itemDict, "parameter");
+                          switch (parmName) {
+                          case "background":
+                          case "mixcolor":
+                            out.println("      " + pad(parmName + ":", 14) + floatArrayToString(getFloatArray(nodeDict, parmName)));
+                            break;
+                          case "intensity":
+                          case "mix":
+                          case "transBlur":
+                            out.println("      " + pad(parmName + ":", 14) + getFloat(nodeDict, parmName));
+                            break;
+                          case "filtertype":
+                            String[] filterType = new String[] {"Off", "Bilinear", "Trilinear", "Anisotropic"};
+                            out.println("      " + pad(parmName + ":", 14) + filterType[getInt(nodeDict, parmName)]);
+                            break;
+                          case "sample":
+                            String[] sampleType = new String[] {"UV1", "UV2"};
+                            out.println("      " + pad(parmName + ":", 14) + sampleType[getInt(nodeDict, parmName)]);
+                            break;
+                          case "tileU":
+                          case "tileV":
+                            out.println("      " + pad(parmName + ":", 14) + getBoolean(nodeDict, parmName));
+                            break;
+                          case "position":
+                          case "scale":
+                            float[] pVals = getFloatArray(nodeDict, parmName);
+                            out.println("      " + pad(parmName + ":", 14) + fmtFloat(pVals[0]) + " " + fmtFloat(pVals[1]));
+                            break;
+                          }
                         }
                       }
                     }
