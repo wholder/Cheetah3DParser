@@ -258,10 +258,6 @@ public class Cheetah3DParser {
                     out.println("    " + pad("Emissive:", 16) + floatArrayToString(getFloatArray(nodeDict, "emisColor")));
                     String[] bumpType = new String[] {"bumpHeight", "bumpNormalYPlus", "bumpNormalYMinus"};
                     out.println("    " + pad("Bump Type:", 16) + bumpType[getInt(nodeDict, "bumpType")]);
-
-                    //     transEta
-                    //   bump
-
                     Node cNode = getChildNode(doc, "param");
                     NodeList xmlNodes = cNode != null ? cNode.getChildNodes() : null;
                     if (xmlNodes != null) {
@@ -284,11 +280,11 @@ public class Cheetah3DParser {
                       NamedNodeMap iAttrs = iNode.getAttributes();
                       Node idNode = iAttrs.getNamedItem("id");
                       String nodeId = idNode.getNodeValue();
-                      String nodeName =idToTexName.get(nodeId);
-                      out.println("    " + pad("Texture:", 16) + getString(nodeDict, "texture"));
+                      String textType = idToTexName.get(nodeId);
+                      out.println("    " + pad("Texture Type:", 16) + textType);
+                      out.println("    " + pad("Texture File:", 16) + getString(nodeDict, "texture"));
                       if (nodeDict.containsKey("tracks2")) {
                         NSObject[] tracks2 = ((NSArray) nodeDict.get("tracks2")).getArray();
-                        Map<String,Object> texParmMap = new HashMap<>();
                         for (NSObject item : tracks2) {
                           NSDictionary itemDict = (NSDictionary) item;
                           String parmName = getString(itemDict, "parameter");
