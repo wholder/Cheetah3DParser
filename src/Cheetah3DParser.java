@@ -1,5 +1,8 @@
 import com.dd.plist.*;
 import org.w3c.dom.Document;
+import org.w3c.dom.NamedNodeMap;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -18,6 +21,8 @@ import java.util.*;
  *
  *  Author: Wayne Holder, 2020
  *  License: MIT (https://opensource.org/licenses/MIT)
+ *
+ * See README.md file for more info
  *
  * Notes 1: Vertices are defined as 4 float values, where the last float is always 0
  *
@@ -200,7 +205,7 @@ public class Cheetah3DParser {
           if (useSystemOut || consoleOut) {
             out = System.out;
           } else {
-            String outFile = inFile.substring(0, off) + ".txt";
+            String outFile = inFile.substring(0, off) + (showInfo ? "-Info" : " ") + ".txt";
             BufferedOutputStream bOut = new BufferedOutputStream(new FileOutputStream(new File(outFile)));
             out = new PrintStream(bOut);
           }
@@ -229,66 +234,90 @@ public class Cheetah3DParser {
                 int id = getInt(matDict, "ID");
                 materialIndexex.put(id, ii);
                 out.println("  Material" + ii + ": '" + getString(matDict, "name") + "'");
+                Map<String,String> idToTexName = new HashMap<>();
                 NSObject[] nodes = ((NSArray) matDict.get("nodes")).getArray();
                 for (int jj = 0; jj < nodes.length; jj++) {
-                  out.println("  node: " + jj);
                   NSObject node = nodes[jj];
                   NSDictionary nodeDict = (NSDictionary) node;
-                  if (nodeDict.containsKey("tracks2")) {
-                    NSObject[] tracks2 = ((NSArray) nodeDict.get("tracks2")).getArray();
-                    for (NSObject item : tracks2) {
-                      NSDictionary itemDict = (NSDictionary) item;
-                      String parmName = getString(itemDict, "parameter");
-                      switch (parmName) {
-                      case "background":
-                      case "color":
-                      case "diffColor":
-                      case "emisColor":
-                      case "mixcolor":
-                      case "reflColor":
-                      case "specColor":
-                      case "transColor":
-                        out.println("    " + pad(parmName + ":", 14) + floatArrayToString(getFloatArray(nodeDict, parmName)));
-                        break;
-                      case "bump":
-                      case "intensity":
-                      case "mix":
-                      case "specSize":
-                      case "transBlur":
-                        out.println("    " + pad(parmName + ":", 14) + getFloat(nodeDict, parmName));
-                        break;
-                      case "reflBlur":
-                        break;
-                      case "bumpType":
-                      case "filtertype":
-                      case "reflSamples":
-                      case "sample":
-                      case "transSamples":
-                        out.println("    " + pad(parmName + ":", 14) + getInt(nodeDict, parmName));
-                        break;
-                      case "reflFresnel":
-                      case "tileU":
-                      case "tileV":
-                      case "transUseAlpha":
-                        out.println("    " + pad(parmName + ":", 14) + getBoolean(nodeDict, parmName));
-                        break;
-                      case "texture":
-                        out.println("    " + pad(parmName + ":", 14) + getString(nodeDict, parmName));
-                        break;
-                      case "position":
-                      case "scale":
-                        float[] pVals = getFloatArray(nodeDict, parmName);
-                        out.println("    " + pad(parmName + ":", 14) + fmtFloat(pVals[0]) + " " + fmtFloat(pVals[1]));
-                        break;
+                  // Parse "xmlDef" section to figure out which textures are in use by associating conID values
+                  NSDictionary baseDict = (NSDictionary) nodeDict.get("baseData");
+                  String matXml = getString(baseDict, "xmlDef");
+                  Document doc = parseXml(matXml);
+                  if (jj == 0) {
+                    Node cNode = getChildNode(doc, "param");
+                    NodeList xmlNodes = cNode != null ? cNode.getChildNodes() : null;
+                    if (xmlNodes != null) {
+                      for (int kk = 0; kk < xmlNodes.getLength(); kk++) {
+                        Node mNode = xmlNodes.item(kk);
+                        String nName = mNode.getNodeName();
+                        NamedNodeMap attrs = mNode.getAttributes();
+                        Node idNode =  attrs.getNamedItem("conID");
+                        Node cnNode =  attrs.getNamedItem("name");
+                        if (idNode != null && cnNode != null && ("color".equals(nName) || "float".equals(nName))) {
+                          String cId = idNode.getNodeValue();
+                          String cName = cnNode.getNodeValue();
+                          idToTexName.put(cId, cName);
+                        }
                       }
                     }
-                  }
-                  if (nodeDict.containsKey("diffColor")) {
-                    //out.println("  diffColor:" + floatArrayToString(getFloatArray(nodeDict, "diffColor")));
-                    //out.println("  reflColor:" + floatArrayToString(getFloatArray(nodeDict, "reflColor")));
-                    //out.println("  emisColor:" + floatArrayToString(getFloatArray(nodeDict, "emisColor")));
-                  } else if (nodeDict.containsKey("texture")) {
-
+                  } else {
+                    Node iNode = getChildNode(doc, "image");
+                    if (iNode != null) {
+                      NamedNodeMap iAttrs = iNode.getAttributes();
+                      Node idNode = iAttrs.getNamedItem("id");
+                      String nodeId = idNode.getNodeValue();
+                      String nodeName =idToTexName.get(nodeId);
+                      out.println("    " + pad(nodeName + ":", 16) + floatArrayToString(getFloatArray(nodeDict, "color")));
+                    }
+                    if (nodeDict.containsKey("tracks2")) {
+                      NSObject[] tracks2 = ((NSArray) nodeDict.get("tracks2")).getArray();
+                      for (NSObject item : tracks2) {
+                        NSDictionary itemDict = (NSDictionary) item;
+                        String parmName = getString(itemDict, "parameter");
+                        switch (parmName) {
+                        case "background":
+                        case "color":
+                        case "diffColor":
+                        case "emisColor":
+                        case "mixcolor":
+                        case "reflColor":
+                        case "specColor":
+                        case "transColor":
+                          out.println("      " + pad(parmName + ":", 14) + floatArrayToString(getFloatArray(nodeDict, parmName)));
+                          break;
+                        case "bump":
+                        case "intensity":
+                        case "mix":
+                        case "specSize":
+                        case "transBlur":
+                          out.println("      " + pad(parmName + ":", 14) + getFloat(nodeDict, parmName));
+                          break;
+                        case "reflBlur":
+                          break;
+                        case "bumpType":
+                        case "filtertype":
+                        case "reflSamples":
+                        case "sample":
+                        case "transSamples":
+                          out.println("      " + pad(parmName + ":", 14) + getInt(nodeDict, parmName));
+                          break;
+                        case "reflFresnel":
+                        case "tileU":
+                        case "tileV":
+                        case "transUseAlpha":
+                          out.println("      " + pad(parmName + ":", 14) + getBoolean(nodeDict, parmName));
+                          break;
+                        case "texture":
+                          out.println("      " + pad(parmName + ":", 14) + getString(nodeDict, parmName));
+                          break;
+                        case "position":
+                        case "scale":
+                          float[] pVals = getFloatArray(nodeDict, parmName);
+                          out.println("      " + pad(parmName + ":", 14) + fmtFloat(pVals[0]) + " " + fmtFloat(pVals[1]));
+                          break;
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -332,6 +361,20 @@ public class Cheetah3DParser {
     } else {
       System.out.println("Usage: java -jar Cheetah3DParser.jar [optional switches] <file.jas>");
     }
+  }
+
+  private static Node getChildNode (Node node, String name) {
+    NodeList children = node.getChildNodes();
+    int len = children.getLength();
+    for (int ii = 0; ii < len; ii++) {
+      Node child = children.item(ii);
+      String cName = child.getNodeName();
+      if (cName.equals(name)) {
+        return child;
+      }
+      return getChildNode(child, name);
+    }
+    return null;
   }
 
   private static void processChildren (NSObject[] children, Map<Integer, Integer> matIdxes, String indent) {
@@ -412,6 +455,8 @@ public class Cheetah3DParser {
         processChildren(children, matIdxes, indent + "  ");
       } else if ("JOINT".equals(objType)) {
         processKeyframes(objDict, indent);
+        NSObject[] children = ((NSArray) objDict.get("childs")).getArray();
+        processChildren(children, matIdxes, indent + "  ");
       }
     }
   }
@@ -420,7 +465,7 @@ public class Cheetah3DParser {
     if (objDict.containsKey("tracks2")) {
       Map<String, List<Float[][]>> takeMap = new LinkedHashMap<>();
       NSObject[] tracks2 = ((NSArray) objDict.get("tracks2")).getArray();
-      out.println(indent + "  Base Position:");
+      out.println(indent + "  Position:");
       for (NSObject nsObject : tracks2) {
         NSDictionary tracks2Dict = (NSDictionary) nsObject;
         String parameter = getString(tracks2Dict, "parameter");
@@ -821,10 +866,7 @@ public class Cheetah3DParser {
   }
 
   private static void printXml (String indent, String xml) throws Exception {
-    InputStream xIn = new ByteArrayInputStream(xml.getBytes());
-    DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-    DocumentBuilder builder = factory.newDocumentBuilder();
-    Document document = builder.parse(xIn);
+    Document document = parseXml(xml);
     Transformer tform = TransformerFactory.newInstance().newTransformer();
     tform.setOutputProperty(OutputKeys.INDENT, "yes");
     tform.setOutputProperty("{http://xml.apache.org/xslt}indent-amount", "2");
@@ -836,5 +878,12 @@ public class Cheetah3DParser {
         out.println(indent + line);
       }
     }
+  }
+
+  private static Document parseXml (String xml) throws Exception {
+    InputStream xIn = new ByteArrayInputStream(xml.getBytes());
+    DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+    DocumentBuilder builder = factory.newDocumentBuilder();
+    return builder.parse(xIn);
   }
 }

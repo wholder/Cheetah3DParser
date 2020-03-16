@@ -13,7 +13,8 @@ First, download the program's executable `.jar` file named `Cheetah3DParser.jar`
   java -jar Cheetah3DParser.jar <filename>
   ``` 
 where `<filename>` is the name of a `.jas` file in the same directory.  Cheetah3DParser will then generate (in the same directory) a file named `xx.txt`, where "`xx`" is the name of the file (minus the `.jas` suffix) you entered for `<filename>`.  
-Alternately, you can use the "`-info`" switch to tell Cheetah3DParser to attempt to analyze the file and dump the results into the output `.txt` file, like this:
+
+Alternately, you can use the "`-info`" switch to tell Cheetah3DParser to attempt to analyze the file and dump the results into the output `.txt` file named "`xx-Info.txt`", like this:
  ```
   java -jar Cheetah3DParser.jar -info <filename>
   ``` 
@@ -55,6 +56,8 @@ Objects:
          scale:     1.000000  1.000000  1.000000
        ...
 ```
+Caution: if the `.jas` file contains animation keyframe data, the size of the "`xx-Info.txt`" file created can get very large.
+
 Optionally, if you don't want the output dumped to a file, you can redirect the output to the console by invoking Cheetah3DParser, like this:
  ```
   java -jar Cheetah3DParser.jar -con <filename>
@@ -265,7 +268,7 @@ Each Keyframe value is labelled by "`name`" and "`parameter`" values in a preced
 As near as I can determine, Vertex normals do not appear to be saved in the `.jas` files I used as test examples.  However, it's possible there may be circumstances where vertex normals are stored.
 
 #### Materials Info
-If materials are used, the key "`shaderTagMaterial`" contains an integer value that is used as a numeric "Id" that links to an item in a Dictionary in the "Materials3 subsection with a key value of "`ID`" and which links to an Integer value that matches the value of "`shaderTagMaterial`".  Note: hopefully I'll have time to add more info in the future as I continue my own analysis of `.jas` files using Cheetah3DParser.
+If materials are used, the key "`shaderTagMaterial`" contains an integer value that is used as a numeric "Id" that links to an item in a Dictionary in the "Materials3 subsection with a key value of "`ID`" and which links to an Integer value that matches the value of "`shaderTagMaterial`".  In addition, XML data in the "xmlDef" (in the "baseData" dictionary) contain "id" and "conID" vaules that are used to determine which texture maps are active and the order in which the material information is enumerated n the "tracks2" list (see code for more details.)
 
 ### **Requirements**
 A [Java JDK or JVM](https://www.java.com/en/) or [OpenJDK](http://openjdk.java.net) version 8, or later must be installed in order to run the code.  There is also a [**Runnable JAR file**](https://github.com/wholder/Cheetah3DParser/blob/master/out/artifacts/Cheetah3DParser_jar) included in the checked in code that you can download and run without having to compile the source code.
