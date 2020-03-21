@@ -12,63 +12,62 @@ First, download the program's executable `.jar` file named `Cheetah3DParser.jar`
  ```
   java -jar Cheetah3DParser.jar <filename>
   ``` 
-where `<filename>` is the name of a `.jas` file in the same directory.  Cheetah3DParser will then generate (in the same directory) a file named `xx.txt`, where "`xx`" is the name of the file (minus the `.jas` suffix) you entered for `<filename>`.  
-
-Alternately, you can use the "`-info`" switch to tell Cheetah3DParser to attempt to analyze the file and dump the results into the output `.txt` file named "`xx-Info.txt`", like this:
- ```
-  java -jar Cheetah3DParser.jar -info <filename>
-  ``` 
-The output using the `-info` switch will look like this:
+where `<filename>` is the name of a `.jas` file in the same directory.  In response, Cheetah3DParser will print a list of basic info about the input file to the console, like this:
  ```
 Takes:
-  Take
-currentTake: Take
-Materials:
-  Material0: 'Green'
-  diffColor: 0.501957  0.999963  0.031039  1.000000
-  reflColor: 0.000000  0.000000  0.000000  1.000000
-  emisColor: 0.000000  0.000000  0.000000  1.000000
-Objects:
-  Camera: CAMERA
-  Cube: NGON
-    vertexcount:  8
-    vertices:
-      -0.500000 -0.500000 -0.500000
-      -0.500000 -0.500000 -0.500000
-      ...
-    polygoncount: 6
-    faces:
-      0 1 2 3 
-      4 5 6 7 
-      ...
-    uvcoords: (set: 0)
-       0.000000  1.000000
-       0.000000  1.000000
-    ...
-     Base Position:
-       position:  0.000000  0.000000  0.000000
-       rotation:  0.000000  0.000000  0.000000
-       scale:     1.000000  1.000000  1.000000
-     Take: Take
-       keyframe: 0
-         position:  0.000000  0.000000  0.000000
-         rotation:  0.000000  0.000000  0.000000
-         scale:     1.000000  1.000000  1.000000
-       ...
+  'mixamo.com'
+currentTake: 'mixamo.com'
+Material: 'dreyar_M', index = 0
+Polygon: 'Dreyar'
+  Material:       'dreyar_M'
+  vertexcount:    7397
+  polygon faces:  7428
+  polygon points: 29094
+  uvcoords:       29094
+  joints:         52
+  weight sets:    52
+  weight vals:    17125
 ```
-Caution: if the `.jas` file contains animation keyframe data, the size of the "`xx-Info.txt`" file created can get very large.
-
-Optionally, if you don't want the output dumped to a file, you can redirect the output to the console by invoking Cheetah3DParser, like this:
+To get more detailed information, you can add one, or more of the following "switch" options to the command invocation, like this:
  ```
-  java -jar Cheetah3DParser.jar -con <filename>
+  java -jar Cheetah3DParser.jar -switch1 -switch2 <filename>
+  ``` 
+where each switch starts with a minus sign (-) and all switches are added before the input file name.  Currently available switches are:
+
+Switch | Function
+------ | --------
+`-materials` | list all the properties for each material
+`-verts` | list the vertices for each Polygon object (x,y,v values for each point)
+`-polys` | list the polygon face windings for each polygon (see note 1)
+`-uvs` | list UV Coords for each polygon (u,v values for each point in polygon list, note 2)
+`-weights` | list joint to vertex weighting values for each polygon 
+`-joints` | list the Joints for each polygon
+`-hierarchy` | list the Joint hierarchy for each polygon
+`-keyframes` | list the keyframes for each polygon (coming soon)
+`-all` | list all information for each polygon (see note 3)
+`-con` | redirect output to the console
+`-raw` | See section: "Cheetah3DParser.s "raw" mode"
+`-sid` | See section: "Cheetah3DParser.s "raw" mode"
+`-hex` | See section: "Cheetah3DParser.s "raw" mode"
+
+Note 1: Lists 3, or more integer values are indexes into the list of vertices to define the points for a polygon.
+
+Note 2: Each index value in the polygon faces list corresponds to a value in the UV list.
+
+Note 3: the switch "`-all`" is the same as adding `-materials`, `-verts`, `-polys`, `-uvs`, `-weights`, `-joints`, `-hierarchy`, `-keyframes` to the command.  Caution, this can produce a lot of output text.
+
+### Cheetah3DParser.s "raw" mode
+In "raw" mode, Cheetah3DParser will parse the raw, pList information in the input file, convert it to indented text and write to an output (in the same directory) named `xx.txt`, where "`xx`" is the name of the file (minus the `.jas` suffix) you entered for `<filename>`.  Run Cheetah3DParser in "raw" mode, like this:
+ ```
+  java -jar Cheetah3DParser.jar -raw <filename>
   ``` 
 By default, Cheetah3DParser does not display the raw data bytes for data it is able to decode into things like a list of vertices.  However, adding the "`-hex`" switch will force Cheetah3DParser to display data this as a series of hex bytes printed before the decoded values (note: the examples of decoded data blocks shown later in this file were printed with the "`-hex`" switch enabled in order to show how the data is decoded from the bytes.)  For example:
  ```
-  java -jar Cheetah3DParser.jar -hex <filename>
+  java -jar Cheetah3DParser.jar -raw -hex <filename>
   ``` 
 One technique I used in analyzing Cheetah3D files, was to save a version of a `.jas` file with a minor change, decode it and the unchanged `.jas` file using Cheetah3DParser and then use a text compile compare program, such as BBEdit, to show the differences between the two decoded files.  However, some `.jas` files, such as those that contain Material definitions, include numeric "id" values that can vary between the two files you're trying to compare.  However, adding the "`-sid`" (suppress id) switch will cause Cheetah3DParser to supress printing these values, which makes it much easier to compare the files.  For example:
  ```
-  java -jar Cheetah3DParser.jar -sid <filename>
+  java -jar Cheetah3DParser.jar -raw -sid <filename>
   ``` 
 Note: you can use multiple switches, but all switches should be delimited by a space and should all be specified before the `.jas` filename.
 

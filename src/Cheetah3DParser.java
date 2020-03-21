@@ -99,7 +99,7 @@ import java.util.*;
  *  Notice the bytes for each float are in big endian format!  Also, the 2nd value, V, is reversed from how it's
  *  used in OBJ files, so you must subtract this value from 1.0 to get the unreversed value.
  *
- * Note 6: Joint info is contained in the Array, which is linked to the "baseData" key in an Dictionary
+ * Note 6: Joint info is contained in the Array, which is linked to the "baseData" key in a Dictionary
  * object, like this:
  *    baseData: Dictionary (1 items)
  *    linkData: Array (52 items)
@@ -159,42 +159,552 @@ import java.util.*;
  */
 
 public class Cheetah3DParser {
-  private static final boolean              useSystemOut = false;
-  private static       boolean              suppressId;
-  private static       boolean              showHexData;
-  private static       boolean              showInfo;
-  private static       boolean              consoleOut;
-  private static       DecimalFormat        df           = new DecimalFormat("0.000000");
-  private static       PrintStream          out          = System.out;
-  private static       Map<String, Integer> parmOrder    = new HashMap<>();
+  private boolean                 consoleOut;
+  private boolean                 suppressId;
+  private boolean                 showHexData;
+  private boolean                 showRaw;
+  private boolean                 showMaterials = false;
+  private boolean                 showPolys     = false;
+  private boolean                 showVertices  = false;
+  private boolean                 showUVs       = false;
+  private boolean                 showWeights   = false;
+  private boolean                 showJoints    = false;
+  private boolean                 showHierarchy = false;
+  private boolean                 showKeyframes = false;
+  private DecimalFormat           df = new DecimalFormat("0.000000");
+  private PrintStream             out = System.out;
+  private Map<String, Integer>    parmOrder = new HashMap<>();
+  private Map<Integer, Material>  idToMaterial = new LinkedHashMap<>();
+  private List<Polygon>           polygons = new ArrayList<>();
+  private List<Material>          materials = new ArrayList<>();
 
-  static {
+  {
     parmOrder.put("position", 0);
     parmOrder.put("rotation", 1);
     parmOrder.put("scale", 2);
   }
 
+  private class Material {
+    private String        name;
+    private float[]       diffColor, specColor, reflColor, transColor, emisColor;
+    private float         specSize, reflBlur, transBlur;
+    private int           index, reflSamples, transSamples, bumpType;
+    private boolean       reflFresnel, transUseAlpha;
+    private String[]      bumpTypes = new String[] {"bumpHeight", "bumpNormalYPlus", "bumpNormalYMinus"};
+    private String[]      filterTypes = new String[] {"Off", "Bilinear", "Trilinear", "Anisotropic"};
+    private  String[]      sampleTypes = new String[] {"UV1", "UV2"};
+    private List<Texture>       textures = new ArrayList<>();
+   private Map<String,Texture>  idToTexture = new HashMap<>();
+
+    Material (int index, String name, int id) {
+      this.index = index;
+      this.name = name;
+      idToMaterial.put(id, this);
+    }
+
+    class Texture {
+      private String    type, file;
+      private float[]   background, mixcolor;
+      private float[]   position, scale;
+      private float     intensity, mix;
+      private int       filtertype, sample;
+      private boolean   tileU, tileV;
+
+      public Texture (String type, String conId) {
+        this.type = type;
+        idToTexture.put(conId, this);
+      }
+
+      private String getType () {
+        if ("bump".equals(type)) {
+          return bumpTypes[bumpType];
+        }
+        return type;
+      }
+    }
+
+    private void addTexture (String name, String conId) {
+      textures.add(new Texture(name, conId));
+    }
+
+    private Texture getTexture (String id) {
+      return idToTexture.get(id);
+    }
+
+    private List<Texture> getTextures () {
+      return textures;
+    }
+
+    private String getName () {
+      return name;
+    }
+
+    public void print (PrintStream out, String indent) {
+      out.println(indent + pad("Diffuse:", 16) + floatArrayToString(diffColor));
+      out.println(indent + pad("Specular:", 16) + floatArrayToString(specColor));
+      out.println(indent + pad("Specular Size:", 16) + specSize);
+      out.println(indent + pad("Reflection:", 16) + floatArrayToString(reflColor));
+      out.println(indent + pad("Ref. Blur:", 16) + fmtFloat(reflBlur));
+      out.println(indent + pad("Ref. Samples:", 16) + reflSamples);
+      out.println(indent + pad("Fresnel:", 16) + reflFresnel);
+      out.println(indent + pad("Transparency:", 16) + floatArrayToString(transColor));
+      out.println(indent + pad("Trans. Blur:", 16) + fmtFloat(transBlur));
+      out.println(indent + pad("Trans. Samples:", 16) + transSamples);
+      out.println(indent + pad("Use Alpha:", 16) + transUseAlpha);
+      out.println(indent + pad("Emissive:", 16) + floatArrayToString(emisColor));
+      out.println(indent + pad("Bump Type:", 16) + bumpTypes[bumpType]);
+      for (Texture texture : textures) {
+        out.println(indent + pad("Texture Type:", 16) + texture.getType());
+        out.println(indent + pad("Texture File:", 16) + "'" + texture.file + "'");
+        out.println(indent + "  " + pad("mixcolor:", 14) + floatArrayToString(texture.mixcolor));
+        out.println(indent + "  " + pad("mix:", 14) + fmtFloat(texture.mix));
+        out.println(indent + "  " + pad("background:", 14) + floatArrayToString(texture.background));
+        out.println(indent + "  " + pad("intensity:", 14) + fmtFloat(texture.intensity));
+        out.println(indent + "  " + pad("sample:", 14) + sampleTypes[texture.sample]);
+        out.println(indent + "  " + pad("position:", 14) + fmtFloat(texture.position[0]) + " " + fmtFloat(texture.position[1]));
+        out.println(indent + "  " + pad("scale:", 14) + fmtFloat(texture.scale[0]) + " " + fmtFloat(texture.scale[1]));
+        out.println(indent + "  " + pad("tileU:", 14) + texture.tileU);
+        out.println(indent + "  " + pad("tileV:", 14) + texture.tileV);
+        out.println(indent + "  " + pad("filtertype:", 14) + filterTypes[texture.filtertype]);
+      }
+    }
+  }
+
+  private class Keyframe {
+    private float[]   position, rotation, scale;
+
+    Keyframe (float[] position, float[] rotation, float[] scale) {
+      this.position = position;
+      this.rotation = rotation;
+      this.scale = scale;
+    }
+  }
+
+  private class Joint {
+    private int         jointId;
+    private float[]     transformMatrix, transformAssociateModelMatrix, transformLinkMatrix;
+    private float[]     bindPoseT, bindPoseR, bindPoseS;
+    private String      jointName;
+    private float[]     translate, rotation, scale;
+    private Joint[]     children = new Joint[0];
+
+    Joint (int jointId) {
+      this.jointId = jointId;
+    }
+
+    void print (PrintStream out, String indent) {
+      out.println(indent + jointName);
+    }
+
+    void sethildren (Joint[] children) {
+      this.children = children;
+    }
+
+    void setBindPose (float[] bindPoseT, float[] bindPoseR, float[] bindPoseS) {
+      this.bindPoseT = bindPoseT;
+      this.bindPoseR = bindPoseR;
+      this.bindPoseS = bindPoseS;
+    }
+
+    void setMatrices (float[] transformMatrix, float[] transformAssociateModelMatrix, float[] transformLinkMatrix) {
+      this.transformMatrix = transformMatrix;
+      this.transformAssociateModelMatrix = transformAssociateModelMatrix;
+      this.transformLinkMatrix = transformLinkMatrix;
+    }
+
+    void setInfo (String jointName, float[] translate, float[] rotation, float[] scale) {
+      this.jointName = jointName;
+      this.translate = translate;
+      this.rotation = rotation;
+      this.scale = scale;
+    }
+  }
+
+  private class Polygon {
+    private String      name;
+    private Material    material;
+    private float[][]   vertices, uvcoords;
+    private int[][]     polyFaces;
+    private Joint[]     joints;
+    private Joint       rootJoint;
+    private int         uvSet, polyPoints, weightVals;
+    private Weight[][]  weights;
+    private Map<Integer,Integer>    idToIndex = new HashMap<>();
+    private Map<Integer,Integer>    indexToId = new HashMap<>();
+    private Map<Integer,Joint>      idToJoint = new LinkedHashMap<>();
+    private Map<Integer,String>     idToJointName = new LinkedHashMap<>();
+    private Map<String,Integer>     nameToJointId = new LinkedHashMap<>();
+
+    private class Weight {
+      private int   index;
+      private float weight;
+
+      Weight (int index, float weight) {
+        this.index = index;
+        this.weight = weight;
+      }
+    }
+
+    Polygon (String name, NSDictionary objDict) {
+      this.name = name;
+      // Process NGON Tags for Material definition, if any
+      NSObject[] tags = ((NSArray) objDict.get("tags")).getArray();
+      for (NSObject tag : tags) {
+        NSDictionary tagDict = (NSDictionary) tag;
+        String tagType = getString(tagDict, "type");
+        switch (tagType) {
+        case "SHADERTAG":
+          int materialId = getInt(tagDict, "shaderTagMaterial");
+          material = idToMaterial.get(materialId);
+          // Grab these other parameters for possible future use...
+          int shaderId = getInt(tagDict, "shaderId");
+          int shaderTagShadingSpace = getInt(tagDict, "shaderTagShadingSpace");
+          int shaderTagSelection = getInt(tagDict, "shaderTagSelection");
+          int shaderTagTangentSpace = getInt(tagDict, "shaderTagTangentSpace");
+          float shaderTagUVRotation = getFloat(tagDict, "shaderTagUVRotation");
+          float[] shaderTagOffset = getFloatArray(tagDict, "shaderTagOffset");
+          break;
+        case "SKELETONTAG":
+          // Added to last joint
+          // Grab these other parameters for possible future use...
+          int skeletonId = getInt(tagDict, "ID");     // Doesn't match anything...
+          int skeletonSkinningMethod = getInt(tagDict, "skeletonSkinningMethod");
+          float skeletonDropoffRate = getFloat(tagDict, "skeletonDropoffRate");
+          break;
+        case "MODETAG":
+          // Not sure what this is for...
+          int modeId = getInt(tagDict, "ID");       // Doesn't match anything...
+          break;
+        case "ANCHORTAG":
+        case "BAKETAG":
+        case "CAUSTICTAG":
+        case "HDRITAG":
+        case "IKHANDLETAG":
+        case "METABALLTAG":
+        case "MORPHTAG":
+        case "ORIENTCONSTRAINTTAG":
+        case "PARENTCONSTRAINTTAG":
+        case "PARTICLETAG":
+        case "POINTCONSTRAINTTAG":
+        case "POSETAG":
+        case "PROPWINTAG":
+        case "RADIOSITYTAG":
+        case "RIGIDBODYTAG":
+        case "ROPETAG":
+        case "SOFTBODYTAG":
+        case "SPLINEIKTAG":
+        case "UVTAG":
+        case "SCRIPTTAG":
+          // Not sure what tese tags are for...
+          break;
+        }
+      }
+      // Get vertices
+      int vertexCount = getInt(objDict, "vertexcount");
+      vertices = new float[vertexCount][3];
+      float[] vertex = getDataFloats(objDict, "vertex");
+      for (int jj = 0; jj < vertex.length; jj += 4) {
+        vertices[jj >> 2][0] = vertex[jj];
+        vertices[jj >> 2][1] = vertex[jj + 1];
+        vertices[jj >> 2][2] = vertex[jj + 2];
+      }
+      // Get polygons
+      int polyCount = getInt(objDict, "polygoncount");
+      polyFaces = new int[polyCount][];
+      int[] faceVals = getDataInts(objDict, "polygons");
+      int[] face = new int[0];
+      int idx1 = 0, idx2 = 0;
+      for (int fVal : faceVals) {
+        if (fVal < 0) {
+          face = polyFaces[idx1++] = new int[-fVal];
+          idx2 = 0;
+        } else {
+          face[idx2++] = fVal;
+          polyPoints++;
+        }
+      }
+      // Get UV Coords
+      float[] uvData = getDataFloats(objDict, "uvcoords");
+      uvcoords = new float[uvData.length >> 2][2];
+      if (uvData.length > 0) {
+        uvSet = getInt(objDict, "activeuvset");
+        for (int ii = 0; ii < uvData.length; ii += 4) {
+          int idx = ii + uvSet * 2;
+          uvcoords[ii >> 2][0] = uvData[idx];       // U
+          uvcoords[ii >> 2][1] = uvData[idx + 1];   // V
+
+        }
+      }
+      // Get Joint to Mesh Weight values
+      for (NSObject tag : tags) {
+        NSDictionary tagDict = (NSDictionary) tag;
+        NSDictionary baseDict = (NSDictionary) tagDict.get("baseData");
+        if (baseDict != null && baseDict.containsKey("linkData")) {
+          NSObject[] linkData = ((NSArray) baseDict.get("linkData")).getArray();
+          int len = linkData.length;
+          joints = new Joint[len];
+          weights = new Weight[len][0];
+          for (int ii = 0; ii < len; ii++) {
+            NSObject item = linkData[ii];
+            if (item instanceof NSDictionary) {
+              NSDictionary ldDict = (NSDictionary) item;
+              int linkID = getInt(ldDict, "linkID");
+              Joint joint = new Joint(linkID);
+              joint.setBindPose(getFloatArray(ldDict, "bindPoseT"), getFloatArray(ldDict, "bindPoseR"),
+                                getFloatArray(ldDict, "bindPoseS"));
+              joint.setMatrices( getDataFloats(ldDict, "transformMatrix"),
+                                 getDataFloats(ldDict, "transformAssociateModelMatrix"),
+                                 getDataFloats(ldDict, "transformLinkMatrix"));
+              joints[ii] = joint;
+              idToJoint.put(linkID, joints[ii]);
+              idToIndex.put(linkID, ii);
+              indexToId.put(ii, linkID);
+              if (ldDict.containsKey("cdata")) {
+                int[] cdata = getDataInts(ldDict, "cdata");
+                Weight[] weightList = new Weight[cdata.length / 2];
+                weights[ii] = weightList;
+                for (int jj = 0; jj < cdata.length; jj += 2) {
+                  int index = cdata[jj];
+                  float weight = Float.intBitsToFloat(cdata[jj + 1]);
+                  weightList[jj / 2] = new Weight(index, weight);
+                  weightVals++;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    private void print (PrintStream out, String indent) {
+      out.println(indent + "  " +  pad("Material:", 16) + (material != null ? "'" + material.getName() + "'" : "default"));
+      out.println(indent + "  " + pad("vertexcount:", 16) + vertices.length);
+      if (showVertices) {
+        out.println(indent + "  vertices:");
+        for (float[] vertex : vertices) {
+          out.println(indent + "    " + fmtFloat(vertex[0]) + " " + fmtFloat(vertex[1]) + " " + fmtFloat(vertex[2]));
+        }
+      }
+      out.println(indent + "  " + pad("polygon faces:", 16) + polyFaces.length);
+      out.println(indent + "  " + pad("polygon points:", 16) + polyPoints);
+      if (showPolys) {
+        out.println(indent + "  polygons:");
+        for (int[] face : polyFaces) {
+          out.print(indent + "    ");
+          boolean addSpace = false;
+          for (int fVal : face) {
+            out.print((addSpace ? " " : "") + fVal );
+            addSpace = true;
+          }
+          out.println();
+        }
+      }
+      out.println(indent + "  " + pad("uvcoords:", 16) + uvcoords.length);
+      if (showUVs) {
+        out.println(indent + "  uvcoords: (set: " + uvSet + ")");
+        for (float[] uvcoord : uvcoords) {
+          out.println(indent + "    " + fmtFloat(uvcoord[0]) + " " + fmtFloat(uvcoord[1]));
+        }
+      }
+      out.println(indent + "  " + pad("joints:", 16) + joints.length);
+      if (showJoints) {
+        for (Joint joint : joints) {
+          joint.print(out, indent + "    ");
+        }
+      }
+      if (showHierarchy) {
+        out.println(indent + "  hierarchy:");
+        printHierarchy(rootJoint, out, indent + "    ");
+      }
+      out.println(indent + "  " + pad("weight sets:", 16) + weights.length);
+      out.println(indent + "  " + pad("weight vals:", 16) + weightVals);
+      if (showWeights) {
+        for (int jointIndex = 0; jointIndex < weights.length; jointIndex++) {
+          Weight[] weightList = weights[jointIndex];
+          // Note: not all joints have weights
+          int jointId = indexToId.get(jointIndex);
+          String jointName = idToJoint.get(jointId).jointName;
+          out.println(indent + "    joint ID = " + jointId + ", name = '" + jointName + "'");
+          for (Weight weight : weightList) {
+            out.println(indent + "      " + weight.index + " " + fmtFloat(weight.weight));
+          }
+        }
+      }
+    }
+  }
+
+  private void printHierarchy (Joint joint, PrintStream out, String indent) {
+    if (joint == null) {
+      int dum = 0;
+    }
+    out.println(indent + joint.jointName);
+    for (Joint child : joint.children) {
+      if (child != null) {
+        printHierarchy(child, out, indent + "  ");
+      }
+    }
+  }
+
+  private List<Material> getMaterials (NSDictionary rootDict) throws Exception {
+    List<Material> materialList = new ArrayList<>();
+    NSObject[] materialsArray = ((NSArray) rootDict.get("Materials3")).getArray();
+    int idx = 0;
+    for (NSObject nsObject : materialsArray) {
+      NSDictionary matDict = (NSDictionary) nsObject;
+      Material material = new Material(idx, getString(matDict, "name"), getInt(matDict, "ID"));
+      materialList.add(material);
+      NSObject[] nodes = ((NSArray) matDict.get("nodes")).getArray();
+      for (int jj = 0; jj < nodes.length; jj++) {
+        NSObject node = nodes[jj];
+        NSDictionary nodeDict = (NSDictionary) node;
+        // Parse "xmlDef" section to figure out which textures are in use by associating conID values
+        NSDictionary baseDict = (NSDictionary) nodeDict.get("baseData");
+        String matXml = getString(baseDict, "xmlDef");
+        Document doc = parseXml(matXml);
+        if (jj == 0) {
+          material.diffColor = getFloatArray(nodeDict, "diffColor");
+          material.specColor = getFloatArray(nodeDict, "specColor");
+          material.specSize = getFloat(nodeDict, "specSize");
+          material.reflColor = getFloatArray(nodeDict, "reflColor");
+          material.reflBlur = getFloat(nodeDict, "reflBlur");
+          material.reflSamples = getInt(nodeDict, "reflSamples");
+          material.reflFresnel = getBoolean(nodeDict, "reflFresnel");
+          material.transColor = getFloatArray(nodeDict, "transColor");
+          material.transBlur = getFloat(nodeDict, "transBlur");
+          material.transSamples = getInt(nodeDict, "transSamples");
+          material.transUseAlpha = getBoolean(nodeDict, "transUseAlpha");
+          material.emisColor = getFloatArray(nodeDict, "emisColor");
+          material.bumpType = getInt(nodeDict, "bumpType");
+          Node cNode = getChildNode(doc, "param");
+          NodeList xmlNodes = cNode != null ? cNode.getChildNodes() : null;
+          if (xmlNodes != null) {
+            for (int kk = 0; kk < xmlNodes.getLength(); kk++) {
+              Node mNode = xmlNodes.item(kk);
+              String nName = mNode.getNodeName();
+              NamedNodeMap attrs = mNode.getAttributes();
+              Node idNode = attrs.getNamedItem("conID");
+              Node cnNode = attrs.getNamedItem("name");
+              if (idNode != null && cnNode != null && ("color".equals(nName) || "float".equals(nName))) {
+                String cId = idNode.getNodeValue();
+                String cName = cnNode.getNodeValue();
+                material.addTexture(cName, cId);
+              }
+            }
+          }
+        } else {
+          Node iNode = getChildNode(doc, "image");
+          if (iNode != null) {
+            NamedNodeMap iAttrs = iNode.getAttributes();
+            Node idNode = iAttrs.getNamedItem("id");
+            String nodeId = idNode.getNodeValue();
+            Material.Texture texture = material.getTexture(nodeId);
+            if (nodeDict.containsKey("tracks2")) {
+              NSObject[] tracks2 = ((NSArray) nodeDict.get("tracks2")).getArray();
+              for (NSObject item : tracks2) {
+                NSDictionary itemDict = (NSDictionary) item;
+                String parmName = getString(itemDict, "parameter");
+                switch (parmName) {
+                case "background":
+                  texture.background = getFloatArray(nodeDict, "background");
+                  break;
+                case "mixcolor":
+                  texture.mixcolor = getFloatArray(nodeDict, "mixcolor");
+                  break;
+                case "intensity":
+                  texture.intensity = getFloat(nodeDict, "intensity");
+                  break;
+                case "mix":
+                  texture.mix = getFloat(nodeDict, "mix");
+                  break;
+                case "filtertype":
+                  texture.filtertype = getInt(nodeDict, "filtertype");
+                  break;
+                case "sample":
+                  texture.sample = getInt(nodeDict, "sample");
+                  break;
+                case "tileU":
+                  texture.tileU = getBoolean(nodeDict, "tileU");
+                  break;
+                case "tileV":
+                  texture.tileV = getBoolean(nodeDict, "tileV");
+                  break;
+                case "position":
+                  texture.position = getFloatArray(nodeDict, "position");
+                  break;
+                case "scale":
+                  texture.scale = getFloatArray(nodeDict, "scale");
+                  break;
+                case "texture":
+                  texture.file = getString(nodeDict, "texture");
+                  break;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    return materialList;
+  }
+
   public static void main (String[] args) throws Exception {
+    new Cheetah3DParser(args);
+  }
+
+  private Cheetah3DParser (String[] args) throws Exception {
+    String outFile = null;
     if (args.length > 0) {
       String inFile = null;
-      for (String arg : args) {
+      for (int ii = 0; ii < args.length; ii++) {
+        String arg = args[ii];
         if (arg.startsWith("-")) {
           switch (arg.substring(1)) {
-          case "sid":
-            suppressId = true;
+          case "materials":
+            showMaterials = true;
             break;
-          case "hex":
-            showHexData = true;
+          case "verts":
+            showVertices = true;
+            break;
+          case "polys":
+            showPolys = true;
+            break;
+          case "uvs":
+            showUVs = true;
+            break;
+          case "weights":
+            showWeights = true;
+            break;
+          case "joints":
+            showJoints = true;
+            break;
+          case "hierarchy":
+            showHierarchy = true;
+            break;
+          case "keyframes":
+            showKeyframes = true;
             break;
           case "con":
             consoleOut = true;
             break;
-          case "info":
-            showInfo = true;
+          case "raw":
+            showRaw = true;
+            break;
+          case "hex":
+            showHexData = true;   // Raw mode only
+            break;
+          case "sid":
+            suppressId = true;   // Raw mode only
+            break;
+          case "all":
+            showPolys = showMaterials = showVertices = showPolys = showUVs = showWeights = showJoints = showHierarchy =
+                        showKeyframes = true;
             break;
           }
         } else {
           inFile = arg;
+          if (ii < args.length - 1) {
+            outFile = args[ii + 1];
+          }
           break;
         }
       }
@@ -202,146 +712,30 @@ public class Cheetah3DParser {
       if (inFile != null && (off = inFile.toLowerCase().indexOf(".jas")) > 0) {
         File file = new File(inFile);
         if (file.exists()) {
-          if (useSystemOut || consoleOut) {
+          if (consoleOut || !showRaw) {
             out = System.out;
           } else {
-            String outFile = inFile.substring(0, off) + (showInfo ? "-Info" : " ") + ".txt";
+            if (outFile == null) {
+              outFile = inFile.substring(0, off) + ".txt";
+            }
             BufferedOutputStream bOut = new BufferedOutputStream(new FileOutputStream(new File(outFile)));
             out = new PrintStream(bOut);
           }
           NSDictionary rootDict = (NSDictionary) PropertyListParser.parse(file);
-          if (showInfo) {
-            // List available animation takes
-            NSDictionary takesDict = (NSDictionary) rootDict.get("Takes");
-            NSObject[] takes = ((NSArray) takesDict.get("takes")).getArray();
-            if (takes.length > 0) {
-              out.println("Takes:");
-              for (NSObject nsObject : takes) {
-                NSDictionary take = (NSDictionary) nsObject;
-                out.println("  " + take.get("name"));
-              }
-              if (takesDict.containsKey("currentTake")) {
-                out.println("currentTake: " + getString(takesDict, "currentTake"));
-              }
-            }
-            Map<Integer, Integer> materialIndexex = new HashMap<>();
-            // Get Materials
-            NSObject[] materials = ((NSArray) rootDict.get("Materials3")).getArray();
-            if (materials.length > 0) {
-              out.println("Materials:");
-              for (int ii = 0; ii < materials.length; ii++) {
-                NSDictionary matDict = (NSDictionary) materials[ii];
-                int id = getInt(matDict, "ID");
-                materialIndexex.put(id, ii);
-                out.println("  Material" + ii + ": '" + getString(matDict, "name") + "'");
-                Map<String,String> idToTexName = new HashMap<>();
-                NSObject[] nodes = ((NSArray) matDict.get("nodes")).getArray();
-                for (int jj = 0; jj < nodes.length; jj++) {
-                  NSObject node = nodes[jj];
-                  NSDictionary nodeDict = (NSDictionary) node;
-                  // Parse "xmlDef" section to figure out which textures are in use by associating conID values
-                  NSDictionary baseDict = (NSDictionary) nodeDict.get("baseData");
-                  String matXml = getString(baseDict, "xmlDef");
-                  Document doc = parseXml(matXml);
-                  if (jj == 0) {
-                    out.println("    " + pad("Diffuse:", 16) + floatArrayToString(getFloatArray(nodeDict, "diffColor")));
-                    out.println("    " + pad("Specular:", 16) + floatArrayToString(getFloatArray(nodeDict, "specColor")));
-                    out.println("    " + pad("Specular Size:", 16) + getFloat(nodeDict, "specSize"));
-                    out.println("    " + pad("Reflection:", 16) + floatArrayToString(getFloatArray(nodeDict, "reflColor")));
-                    out.println("    " + pad("Ref. Blur:", 16) + getFloat(nodeDict, "reflBlur"));
-                    out.println("    " + pad("Ref. Samples:", 16) + getInt(nodeDict, "reflSamples"));
-                    out.println("    " + pad("Fresnel:", 16) + getBoolean(nodeDict, "reflFresnel"));
-                    out.println("    " + pad("Transparency:", 16) + floatArrayToString(getFloatArray(nodeDict, "transColor")));
-                    out.println("    " + pad("Trans. Blur:", 16) + getFloat(nodeDict, "transBlur"));
-                    out.println("    " + pad("Trans. Samples:", 16) + getInt(nodeDict, "transSamples"));
-                    out.println("    " + pad("Use Alpha:", 16) + getBoolean(nodeDict, "transUseAlpha"));
-                    out.println("    " + pad("Emissive:", 16) + floatArrayToString(getFloatArray(nodeDict, "emisColor")));
-                    String[] bumpType = new String[] {"bumpHeight", "bumpNormalYPlus", "bumpNormalYMinus"};
-                    out.println("    " + pad("Bump Type:", 16) + bumpType[getInt(nodeDict, "bumpType")]);
-                    Node cNode = getChildNode(doc, "param");
-                    NodeList xmlNodes = cNode != null ? cNode.getChildNodes() : null;
-                    if (xmlNodes != null) {
-                      for (int kk = 0; kk < xmlNodes.getLength(); kk++) {
-                        Node mNode = xmlNodes.item(kk);
-                        String nName = mNode.getNodeName();
-                        NamedNodeMap attrs = mNode.getAttributes();
-                        Node idNode =  attrs.getNamedItem("conID");
-                        Node cnNode =  attrs.getNamedItem("name");
-                        if (idNode != null && cnNode != null && ("color".equals(nName) || "float".equals(nName))) {
-                          String cId = idNode.getNodeValue();
-                          String cName = cnNode.getNodeValue();
-                          idToTexName.put(cId, cName);
-                        }
-                      }
-                    }
-                  } else {
-                    Node iNode = getChildNode(doc, "image");
-                    if (iNode != null) {
-                      NamedNodeMap iAttrs = iNode.getAttributes();
-                      Node idNode = iAttrs.getNamedItem("id");
-                      String nodeId = idNode.getNodeValue();
-                      String textType = idToTexName.get(nodeId);
-                      out.println("    " + pad("Texture Type:", 16) + textType);
-                      out.println("    " + pad("Texture File:", 16) + getString(nodeDict, "texture"));
-                      if (nodeDict.containsKey("tracks2")) {
-                        NSObject[] tracks2 = ((NSArray) nodeDict.get("tracks2")).getArray();
-                        for (NSObject item : tracks2) {
-                          NSDictionary itemDict = (NSDictionary) item;
-                          String parmName = getString(itemDict, "parameter");
-                          switch (parmName) {
-                          case "background":
-                          case "mixcolor":
-                            out.println("      " + pad(parmName + ":", 14) + floatArrayToString(getFloatArray(nodeDict, parmName)));
-                            break;
-                          case "intensity":
-                          case "mix":
-                          case "transBlur":
-                            out.println("      " + pad(parmName + ":", 14) + getFloat(nodeDict, parmName));
-                            break;
-                          case "filtertype":
-                            String[] filterType = new String[] {"Off", "Bilinear", "Trilinear", "Anisotropic"};
-                            out.println("      " + pad(parmName + ":", 14) + filterType[getInt(nodeDict, parmName)]);
-                            break;
-                          case "sample":
-                            String[] sampleType = new String[] {"UV1", "UV2"};
-                            out.println("      " + pad(parmName + ":", 14) + sampleType[getInt(nodeDict, parmName)]);
-                            break;
-                          case "tileU":
-                          case "tileV":
-                            out.println("      " + pad(parmName + ":", 14) + getBoolean(nodeDict, parmName));
-                            break;
-                          case "position":
-                          case "scale":
-                            float[] pVals = getFloatArray(nodeDict, parmName);
-                            out.println("      " + pad(parmName + ":", 14) + fmtFloat(pVals[0]) + " " + fmtFloat(pVals[1]));
-                            break;
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-            if (true) {
-              // List object data
-              NSObject[] objects = ((NSArray) rootDict.get("Objects")).getArray();
-              out.println("Objects:");
-              processObjects(objects, materialIndexex, "  ");
-            }
-          } else {
+          if (showRaw) {
+            // Dump indented text representation of file
             for (String key : rootDict.allKeys()) {
               NSObject obj = rootDict.get(key);
               List<String> path = new ArrayList<>();
               path.add(key);
               switch (key) {
               case "Render":
-              case "Objects":     // NSArray[3] Camera, Dreyar, mixamorig:Hips
-              case "Takes":       // NSArray[2] prevTo, length, name, prevFrom
-              case "Materials3":  // NSArray[1] name = "dreyar_M", nodes
+              case "Objects":
+              case "Takes":
+              case "Materials3":
               case "Dynamics":
-              case "Animation":   // NSDictionary(10) animFPS, animTimerPlay, etc.
-              case "Layer":       // NSArray[8] layerVisibleInRenderer, layerName, layerColor, etc.
+              case "Animation":
+              case "Layer":
                 enumerate(path, new ArrayList<>(), 0, null, obj, null, " ");
                 break;
               case "Version":
@@ -349,6 +743,37 @@ public class Cheetah3DParser {
                 out.println("Version = '" + nStr.toString().trim() + "'");
                 break;
               }
+            }
+          } else {
+            // List available animation takes
+            NSDictionary takesDict = (NSDictionary) rootDict.get("Takes");
+            NSObject[] takes = ((NSArray) takesDict.get("takes")).getArray();
+            if (takes.length > 0) {
+              out.println("Takes:");
+              for (NSObject nsObject : takes) {
+                NSDictionary take = (NSDictionary) nsObject;
+                out.println("  '" + take.get("name") + "'");
+              }
+              if (takesDict.containsKey("currentTake")) {
+                out.println("currentTake: '" + getString(takesDict, "currentTake") + "'");
+              }
+            }
+            // Process Materials
+            materials = getMaterials(rootDict);
+            // Process Objects
+            NSObject[] objects = ((NSArray) rootDict.get("Objects")).getArray();
+            processObjects(objects, null, "  ");
+            // Print Materials
+            for (Material material : materials) {
+              out.println("Material: '" + material.getName() + "', index = " + material.index);
+              if (showMaterials) {
+                material.print(out, "  ");
+              }
+            }
+            // Print Polygons
+            for (Polygon polygon : polygons) {
+              out.println("Polygon: '" + polygon.name + "'");
+              polygon.print(out, "");
             }
           }
         } else {
@@ -378,103 +803,64 @@ public class Cheetah3DParser {
     return null;
   }
 
-  private static void processChildren (NSObject[] children, Map<Integer, Integer> matIdxes, String indent) {
-    for (NSObject child : children) {
-      NSDictionary childDict = (NSDictionary) child;
-      processObjects(children, matIdxes, indent + "  ");
-      if (childDict.containsKey("childs")) {
-        processChildren(((NSArray) childDict.get("childs")).getArray(), matIdxes, indent + "  ");
-      }
-    }
-  }
-
-  private static void processObjects (NSObject[] objects, Map<Integer, Integer> matIdxes, String indent) {
+  private void processObjects (NSObject[] objects, Polygon polygon, String indent) {
     for (NSObject object : objects) {
       NSDictionary objDict = (NSDictionary) object;
       String objName = getString(objDict, "name");
       String objType = getString(objDict, "type");
-      out.println(indent + objType + ": '" + objName + "'");
       if ("NGON".equals(objType)) {
-        // Process NGON Tags
-        NSObject[] tags = ((NSArray) objDict.get("tags")).getArray();
-        for (NSObject tag : tags) {
-          NSDictionary tagDict = (NSDictionary) tag;
-          String tagType = getString(tagDict, "type");
-          if ("SHADERTAG".equals(tagType)) {
-            int materialId = getInt(tagDict, "shaderTagMaterial");
-            if (matIdxes.containsKey(materialId)) {
-              out.println(indent + "  Material: " + matIdxes.get(materialId));
-            }
+        polygon = new Polygon(objName, objDict);
+        polygons.add(polygon);
+        // Extract and reorder animation keyframes, if any
+        processKeyframes(objDict, polygon);
+      } else if ("FOLDER".equals(objType)) {
+        out.println(indent + objType + ": '" + objName + "'");
+        processObjects(((NSArray) objDict.get("childs")).getArray(), polygon, indent + "  ");
+      } else if ("JOINT".equals(objType)) {
+        int id = getInt(objDict, "ID");
+        Joint joint = polygon.idToJoint.get(id);
+        if (joint != null) {
+          if (polygon.rootJoint == null) {
+            polygon.rootJoint = joint;
           }
-        }
-        // List vertices
-        int vertexCount = getInt(objDict, "vertexcount");
-        out.println(indent + "  vertexcount: " + vertexCount);
-        float[] vertices = getDataFloats(objDict, "vertex");
-        if (vertices.length > 0) {
-          out.println(indent + "  vertices:");
-          for (int jj = 0; jj < vertices.length; jj += 4) {
-            out.println(indent + "    " + fmtFloat(vertices[jj]) + " " + fmtFloat(vertices[jj]) + " " +
-                            fmtFloat(vertices[jj]));
+          // Note: not all Joints have names
+          float[] translate = getFloatArray(objDict, "position");
+          float[] rotation = getFloatArray(objDict, "rotation");
+          float[] scale = getFloatArray(objDict, "scale");
+          joint.setInfo(objName, translate, rotation, scale);
+          polygon.idToJointName.put(id, objName);
+          polygon.nameToJointId.put(objName, id);
+          NSObject[] children = ((NSArray) objDict.get("childs")).getArray();
+          Joint[] childJoints = new Joint[children.length];
+          for (int ii = 0; ii < children.length; ii++) {
+            NSDictionary childDict = (NSDictionary) children[ii];
+            int childId = getInt(childDict, "ID");
+            childJoints[ii] = polygon.idToJoint.get(childId);
           }
-        }
-        // List polygons
-        int polyCount = getInt(objDict, "polygoncount");
-        out.println(indent + "  polygoncount: " + polyCount);
-        int[] faces = getDataInts(objDict, "polygons");
-        if (faces.length > 0) {
-          out.println(indent + "  faces:");
-          int count = 0;
-          for (int fVal : faces) {
-            if (fVal < 0) {
-              count = -fVal;
-              out.print(indent + "    ");
-            } else {
-              out.print(fVal + " ");
-              if (--count == 0) {
-                out.println();
-              }
-            }
-          }
-        }
-        // List UV Coords
-        float[] uvcoords = getDataFloats(objDict, "uvcoords");
-        if (uvcoords.length > 0) {
-          int uvSet = getInt(objDict, "activeuvset");
-          out.println(indent + "  uvcoords: (set: " + uvSet + ")");
-          for (int ii = 0; ii < uvcoords.length; ii += 4) {
-            int idx = ii + uvSet * 2;
-            float u = uvcoords[idx];
-            float v = uvcoords[idx + 1];
-            out.println(indent + "    " + fmtFloat(u) + " " + fmtFloat(v));
-          }
+          joint.sethildren(childJoints);
         }
         // Extract and reorder animation keyframes, if any
-        processKeyframes(objDict, indent);
-      } else if ("FOLDER".equals(objType)) {
-        NSObject[] children = ((NSArray) objDict.get("childs")).getArray();
-        processChildren(children, matIdxes, indent + "  ");
-      } else if ("JOINT".equals(objType)) {
-        processKeyframes(objDict, indent);
-        NSObject[] children = ((NSArray) objDict.get("childs")).getArray();
-        processChildren(children, matIdxes, indent + "  ");
+        processKeyframes(objDict, polygon);
+        processObjects(((NSArray) objDict.get("childs")).getArray(), polygon, indent + "  ");
+      } else if ("CAMERA".equals(objType)) {
+        // Not used
       }
     }
   }
 
-  private static void processKeyframes (NSDictionary objDict, String indent) {
+  private void processSkeleton (NSDictionary objDict, Polygon polygon) {
+
+  }
+
+  private void processKeyframes (NSDictionary objDict, Polygon polygon) {
     if (objDict.containsKey("tracks2")) {
       Map<String, List<Float[][]>> takeMap = new LinkedHashMap<>();
       NSObject[] tracks2 = ((NSArray) objDict.get("tracks2")).getArray();
-      out.println(indent + "  Position:");
       for (NSObject nsObject : tracks2) {
         NSDictionary tracks2Dict = (NSDictionary) nsObject;
         String parameter = getString(tracks2Dict, "parameter");
         if ("position".equals(parameter) || "rotation".equals(parameter) || "scale".equals(parameter)) {
           int parmIdx = parmOrder.get(parameter);
-          float[] val = getFloatArray(tracks2Dict, "value");
-          out.println(indent + "    " + pad(parameter + ": ", 10) + fmtFloat(val[0]) + " " + fmtFloat(val[0]) + " " +
-                          fmtFloat(val[0]));
           NSObject[] pTakes = ((NSArray) tracks2Dict.get("takes")).getArray();
           for (NSObject pTake : pTakes) {
             NSDictionary take = (NSDictionary) pTake;
@@ -506,31 +892,40 @@ public class Cheetah3DParser {
           }
         }
       }
-      // Print Keyframes
-      String[] parmNames = new String[] {"position", "rotation", "scale"};
-      for (String key : takeMap.keySet()) {
-        out.println(indent + "  Take: " + key);
-        List<Float[][]> tList = takeMap.get(key);
-        int num = 0;
-        for (Float[][] keyframe : tList) {
-          out.println(indent + "    keyframe: " + num++);
-          for (int ii = 0; ii < keyframe.length; ii++) {
-            String parmName = parmNames[ii];
-            Float[] val = keyframe[ii];
-            // Filling any missing values
-            if (val[0] == null || val[1] == null || val[2] == null) {
-              if ("scale".equals(parmName)) {
-                val = new Float[] {1.0f, 1.0f, 1.0f};
-              } else {
-                val = new Float[] {0.0f, 0.0f, 0.0f};
+      if (showJoints && showKeyframes) {
+        // Print Keyframes (if we're also printing joint info)
+        String[] parmNames = new String[] {"position", "rotation", "scale"};
+        for (String key : takeMap.keySet()) {
+          //out.println(indent + "  Take: " + key);
+          List<Float[][]> tList = takeMap.get(key);
+          int num = 0;
+          for (Float[][] keyframe : tList) {
+            //out.println(indent + "    keyframe: " + num++);
+            for (int ii = 0; ii < keyframe.length; ii++) {
+              String parmName = parmNames[ii];
+              Float[] val = keyframe[ii];
+              // Filling any missing values
+              if (val[0] == null || val[1] == null || val[2] == null) {
+                if ("scale".equals(parmName)) {
+                  val = new Float[] {1.0f, 1.0f, 1.0f};
+                } else {
+                  val = new Float[] {0.0f, 0.0f, 0.0f};
+                }
               }
+              //out.println(indent + "      " + pad(parmName + ": ", 10) + fmtCoord(val));
             }
-            out.print(indent + "      " + pad(parmName + ": ", 10));
-            out.println(fmtFloat(val[0]) + " " + fmtFloat(val[1]) + " " + fmtFloat(val[2]));
           }
         }
       }
     }
+  }
+
+  private String fmtCoord (float[] val) {
+    return fmtFloat(val[0]) + " " + fmtFloat(val[1]) + " " + fmtFloat(val[2]);
+  }
+
+  private String fmtCoord (Float[] val) {
+    return fmtFloat(val[0]) + " " + fmtFloat(val[1]) + " " + fmtFloat(val[2]);
   }
 
   private static String pad (String str, int minLength) {
@@ -541,7 +936,7 @@ public class Cheetah3DParser {
     return strBuilder.toString();
   }
 
-  private static String floatArrayToString (float[] ary) {
+  private String floatArrayToString (float[] ary) {
     return fmtFloat(ary[0]) + " " + fmtFloat(ary[1]) + " " + fmtFloat(ary[2]) + " " + fmtFloat(ary[3]);
   }
 
@@ -594,7 +989,7 @@ public class Cheetah3DParser {
     return nData.bytes();
   }
 
-  private static void enumerate (List<String> path, List<NSObject> pList, int lIdx, String dKey, NSObject cObj, NSObject pObj,
+  private void enumerate (List<String> path, List<NSObject> pList, int lIdx, String dKey, NSObject cObj, NSObject pObj,
                                  String indent) throws Exception {
     if (cObj instanceof NSArray) {
       NSArray nAry = (NSArray) cObj;
@@ -812,7 +1207,7 @@ public class Cheetah3DParser {
     }
   }
 
-  private static void printHex (byte[] data, String indent, int ii) {
+  private void printHex (byte[] data, String indent, int ii) {
     if ((ii & 3) == 0) {
       out.print(indent);
     } else if (showHexData) {
@@ -848,7 +1243,7 @@ public class Cheetah3DParser {
     return buf.toString();
   }
 
-  private static String fmtFloat (float fVal) {
+  private String fmtFloat (float fVal) {
     fVal = fVal == -0 ? 0 : fVal;
     if (Math.abs(fVal) > 100000) {
       return String.format((fVal >= 0 ? " %e" : "%e"), fVal);
@@ -866,7 +1261,7 @@ public class Cheetah3DParser {
     return Float.intBitsToFloat(getInt(data, idx));
   }
 
-  private static void printXml (String indent, String xml) throws Exception {
+  private void printXml (String indent, String xml) throws Exception {
     Document document = parseXml(xml);
     Transformer tform = TransformerFactory.newInstance().newTransformer();
     tform.setOutputProperty(OutputKeys.INDENT, "yes");
@@ -881,7 +1276,7 @@ public class Cheetah3DParser {
     }
   }
 
-  private static Document parseXml (String xml) throws Exception {
+  private Document parseXml (String xml) throws Exception {
     InputStream xIn = new ByteArrayInputStream(xml.getBytes());
     DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
     DocumentBuilder builder = factory.newDocumentBuilder();
