@@ -1,13 +1,12 @@
 ## **Cheetah3DParser**
-
 [Cheetah3D](https://www.cheetah3d.com) is a wonderful 3D modeling, rendering and animation program for the Mac written by Martin Wengenmayer.  Cheetah3DParser is experimental code I created that's designed to read Cheetah3D's `.jas` files and then dump them out as an indented text file designed to show the hierarchy of the data.  Since `.jas` files are encoded in [Apple Binary pList format](https://en.wikipedia.org/wiki/Property_list), Cheetah3DParser uses the [dd-plist](https://github.com/3breadt/dd-plist) library to read them.
 
 ### Caveats
 This code is a work in progress intended mainly as a tool to enable you to view and study how Cheetah 3D stores its data.  As a consequence, the code is actually pretty ugly in places. mostly due to code I added that tries to annotate some of the data blocks in order to better show what the various values mean.  My eventual goal is to use what I've learned from writing Cheetah3DParser to write an importer for JavaFx that can read `.jas` files.  However, at the moment, this project is still in the planning stages.
 
 Also, while this document will attempt to explain how Cheetah3D stores data in `.jas` files, the information I present here is based only on my own research and may be flawed, or incomplete.  So, I encourage you to make your own study of one, or more .jas files using Cheetah3DParser and reach your own conclusions.
-### Running Cheetah3DParser
 
+### Running Cheetah3DParser
 First, download the program's executable `.jar` file named `Cheetah3DParser.jar` [using this link](https://github.com/wholder/Cheetah3DParser/blob/master/out/artifacts/Cheetah3DParser_jar) and copy it into a convenient folder that also contains some `.jas` files.  Then (assuming you have Java 8, or later installed on your computer), you can run the code from the command line, or terminal, like this:
  ```
   java -jar Cheetah3DParser.jar <filename>
