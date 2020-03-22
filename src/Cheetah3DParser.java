@@ -159,6 +159,7 @@ import java.util.*;
  */
 
 public class Cheetah3DParser {
+  private static DecimalFormat    df = new DecimalFormat("0.000000");
   private boolean                 consoleOut;
   private boolean                 suppressId;
   private boolean                 showHexData;
@@ -171,7 +172,6 @@ public class Cheetah3DParser {
   private boolean                 showJoints    = false;
   private boolean                 showHierarchy = false;
   private boolean                 showKeyframes = false;
-  private DecimalFormat           df = new DecimalFormat("0.000000");
   private PrintStream             out = System.out;
   private Map<String, Integer>    parmOrder = new HashMap<>();
   private Map<Integer, Material>  idToMaterial = new LinkedHashMap<>();
@@ -185,7 +185,7 @@ public class Cheetah3DParser {
   }
 
   private class Material {
-    private String        name;
+    private String        materialName;
     private float[]       diffColor, specColor, reflColor, transColor, emisColor;
     private float         specSize, reflBlur, transBlur;
     private int           index, reflSamples, transSamples, bumpType;
@@ -198,7 +198,7 @@ public class Cheetah3DParser {
 
     Material (int index, String name, int id) {
       this.index = index;
-      this.name = name;
+      this.materialName = name;
       idToMaterial.put(id, this);
     }
 
@@ -231,34 +231,30 @@ public class Cheetah3DParser {
       return idToTexture.get(id);
     }
 
-    private List<Texture> getTextures () {
-      return textures;
-    }
-
     private String getName () {
-      return name;
+      return materialName;
     }
 
     public void print (PrintStream out, String indent) {
-      out.println(indent + pad("Diffuse:", 16) + floatArrayToString(diffColor));
-      out.println(indent + pad("Specular:", 16) + floatArrayToString(specColor));
+      out.println(indent + pad("Diffuse:", 16) + fmtARGB(diffColor));
+      out.println(indent + pad("Specular:", 16) + fmtARGB(specColor));
       out.println(indent + pad("Specular Size:", 16) + specSize);
-      out.println(indent + pad("Reflection:", 16) + floatArrayToString(reflColor));
+      out.println(indent + pad("Reflection:", 16) + fmtARGB(reflColor));
       out.println(indent + pad("Ref. Blur:", 16) + fmtFloat(reflBlur));
       out.println(indent + pad("Ref. Samples:", 16) + reflSamples);
       out.println(indent + pad("Fresnel:", 16) + reflFresnel);
-      out.println(indent + pad("Transparency:", 16) + floatArrayToString(transColor));
+      out.println(indent + pad("Transparency:", 16) + fmtARGB(transColor));
       out.println(indent + pad("Trans. Blur:", 16) + fmtFloat(transBlur));
       out.println(indent + pad("Trans. Samples:", 16) + transSamples);
       out.println(indent + pad("Use Alpha:", 16) + transUseAlpha);
-      out.println(indent + pad("Emissive:", 16) + floatArrayToString(emisColor));
+      out.println(indent + pad("Emissive:", 16) + fmtARGB(emisColor));
       out.println(indent + pad("Bump Type:", 16) + bumpTypes[bumpType]);
       for (Texture texture : textures) {
         out.println(indent + pad("Texture Type:", 16) + texture.getType());
         out.println(indent + pad("Texture File:", 16) + "'" + texture.file + "'");
-        out.println(indent + "  " + pad("mixcolor:", 14) + floatArrayToString(texture.mixcolor));
+        out.println(indent + "  " + pad("mixcolor:", 14) + fmtARGB(texture.mixcolor));
         out.println(indent + "  " + pad("mix:", 14) + fmtFloat(texture.mix));
-        out.println(indent + "  " + pad("background:", 14) + floatArrayToString(texture.background));
+        out.println(indent + "  " + pad("background:", 14) + fmtARGB(texture.background));
         out.println(indent + "  " + pad("intensity:", 14) + fmtFloat(texture.intensity));
         out.println(indent + "  " + pad("sample:", 14) + sampleTypes[texture.sample]);
         out.println(indent + "  " + pad("position:", 14) + fmtFloat(texture.position[0]) + " " + fmtFloat(texture.position[1]));
@@ -270,19 +266,32 @@ public class Cheetah3DParser {
     }
   }
 
-  private class Keyframe {
-    private float[]   position, rotation, scale;
+  private static class Take {
+    private String                  takeName;
+    private Map<String,Keyframe[]>  keyframes = new LinkedHashMap<>();
 
-    Keyframe (float[] position, float[] rotation, float[] scale) {
-      this.position = position;
+    Take (String takeName) {
+      this.takeName = takeName;
+    }
+
+    private void addKeyframes (String jointName, Keyframe[] keyframes) {
+      this.keyframes.put(jointName, keyframes);
+    }
+  }
+
+  private static class Keyframe {
+    private float[] translate, rotation, scale;
+
+    Keyframe (float[] translate, float[] rotation, float[] scale) {
+      this.translate = translate;
       this.rotation = rotation;
       this.scale = scale;
     }
   }
 
-  private class Joint {
+  private static class Joint {
     private int         jointId;
-    private float[]     transformMatrix, transformAssociateModelMatrix, transformLinkMatrix;
+    private float[]     transformMatrix, transformLinkMatrix, transformAssociateModelMatrix;
     private float[]     bindPoseT, bindPoseR, bindPoseS;
     private String      jointName;
     private float[]     translate, rotation, scale;
@@ -294,6 +303,25 @@ public class Cheetah3DParser {
 
     void print (PrintStream out, String indent) {
       out.println(indent + jointName);
+      out.println(indent + "  translate: " + fmtCoord(translate));
+      out.println(indent + "  rotation:  " + fmtCoord(rotation));
+      out.println(indent + "  scale:     " + fmtCoord(scale));
+      out.println(indent + "  bindPoseT: " + fmtCoord(bindPoseT));
+      out.println(indent + "  bindPoseR: " + fmtCoord(bindPoseR));
+      out.println(indent + "  bindPoseS: " + fmtCoord(bindPoseS));
+      out.println(indent + "  transformMatrix:");
+      printMatrix(out, indent + "   ", transformMatrix);
+      out.println(indent + "  transformLinkMatrix:");
+      printMatrix(out, indent + "   ", transformLinkMatrix);
+      out.println(indent + "  transformAssociateModelMatrix:");
+      printMatrix(out, indent + "   ", transformAssociateModelMatrix);
+    }
+
+    private void printMatrix (PrintStream out, String indent, float[] mat) {
+      for (int ii = 0; ii < mat.length; ii += 4) {
+        out.println(indent + fmtFloat(mat[ii]) + " " + fmtFloat(mat[ii +1]) + " " + fmtFloat(mat[ii +2]));
+
+      }
     }
 
     void sethildren (Joint[] children) {
@@ -321,7 +349,7 @@ public class Cheetah3DParser {
   }
 
   private class Polygon {
-    private String      name;
+    private String      polygonName;
     private Material    material;
     private float[][]   vertices, uvcoords;
     private int[][]     polyFaces;
@@ -329,11 +357,9 @@ public class Cheetah3DParser {
     private Joint       rootJoint;
     private int         uvSet, polyPoints, weightVals;
     private Weight[][]  weights;
-    private Map<Integer,Integer>    idToIndex = new HashMap<>();
-    private Map<Integer,Integer>    indexToId = new HashMap<>();
-    private Map<Integer,Joint>      idToJoint = new LinkedHashMap<>();
-    private Map<Integer,String>     idToJointName = new LinkedHashMap<>();
-    private Map<String,Integer>     nameToJointId = new LinkedHashMap<>();
+    private Map<Integer,Integer>  indexToId = new HashMap<>();
+    private Map<Integer,Joint>    idToJoint = new LinkedHashMap<>();
+    private Map<String,Take>      takes = new LinkedHashMap<>();
 
     private class Weight {
       private int   index;
@@ -345,8 +371,16 @@ public class Cheetah3DParser {
       }
     }
 
+    private Take getTake (String takeName) {
+      Take take = takes.get(takeName);
+      if (take == null) {
+        takes.put(takeName, take = new Take(takeName));
+      }
+      return take;
+    }
+
     Polygon (String name, NSDictionary objDict) {
-      this.name = name;
+      this.polygonName = name;
       // Process NGON Tags for Material definition, if any
       NSObject[] tags = ((NSArray) objDict.get("tags")).getArray();
       for (NSObject tag : tags) {
@@ -357,23 +391,23 @@ public class Cheetah3DParser {
           int materialId = getInt(tagDict, "shaderTagMaterial");
           material = idToMaterial.get(materialId);
           // Grab these other parameters for possible future use...
-          int shaderId = getInt(tagDict, "shaderId");
-          int shaderTagShadingSpace = getInt(tagDict, "shaderTagShadingSpace");
-          int shaderTagSelection = getInt(tagDict, "shaderTagSelection");
-          int shaderTagTangentSpace = getInt(tagDict, "shaderTagTangentSpace");
-          float shaderTagUVRotation = getFloat(tagDict, "shaderTagUVRotation");
-          float[] shaderTagOffset = getFloatArray(tagDict, "shaderTagOffset");
+          //int shaderId = getInt(tagDict, "shaderId");
+          //int shaderTagShadingSpace = getInt(tagDict, "shaderTagShadingSpace");
+          //int shaderTagSelection = getInt(tagDict, "shaderTagSelection");
+          //int shaderTagTangentSpace = getInt(tagDict, "shaderTagTangentSpace");
+          //float shaderTagUVRotation = getFloat(tagDict, "shaderTagUVRotation");
+          //float[] shaderTagOffset = getFloatArray(tagDict, "shaderTagOffset");
           break;
         case "SKELETONTAG":
           // Added to last joint
           // Grab these other parameters for possible future use...
-          int skeletonId = getInt(tagDict, "ID");     // Doesn't match anything...
-          int skeletonSkinningMethod = getInt(tagDict, "skeletonSkinningMethod");
-          float skeletonDropoffRate = getFloat(tagDict, "skeletonDropoffRate");
+          //int skeletonId = getInt(tagDict, "ID");     // Doesn't match anything...
+          //int skeletonSkinningMethod = getInt(tagDict, "skeletonSkinningMethod");
+          //float skeletonDropoffRate = getFloat(tagDict, "skeletonDropoffRate");
           break;
         case "MODETAG":
           // Not sure what this is for...
-          int modeId = getInt(tagDict, "ID");       // Doesn't match anything...
+          //int modeId = getInt(tagDict, "ID");       // Doesn't match anything...
           break;
         case "ANCHORTAG":
         case "BAKETAG":
@@ -457,7 +491,6 @@ public class Cheetah3DParser {
                                  getDataFloats(ldDict, "transformLinkMatrix"));
               joints[ii] = joint;
               idToJoint.put(linkID, joints[ii]);
-              idToIndex.put(linkID, ii);
               indexToId.put(ii, linkID);
               if (ldDict.containsKey("cdata")) {
                 int[] cdata = getDataInts(ldDict, "cdata");
@@ -476,21 +509,21 @@ public class Cheetah3DParser {
       }
     }
 
-    private void print (PrintStream out, String indent) {
-      out.println(indent + "  " +  pad("Material:", 16) + (material != null ? "'" + material.getName() + "'" : "default"));
-      out.println(indent + "  " + pad("vertexcount:", 16) + vertices.length);
+    private void print (PrintStream out) {
+      out.println("  " +  pad("Material:", 16) + (material != null ? "'" + material.getName() + "'" : "default"));
+      out.println("  " + pad("vertexcount:", 16) + vertices.length);
       if (showVertices) {
-        out.println(indent + "  vertices:");
+        out.println("  vertices:");
         for (float[] vertex : vertices) {
-          out.println(indent + "    " + fmtFloat(vertex[0]) + " " + fmtFloat(vertex[1]) + " " + fmtFloat(vertex[2]));
+          out.println("    " + fmtCoord(vertex));
         }
       }
-      out.println(indent + "  " + pad("polygon faces:", 16) + polyFaces.length);
-      out.println(indent + "  " + pad("polygon points:", 16) + polyPoints);
+      out.println("  " + pad("polygon faces:", 16) + polyFaces.length);
+      out.println("  " + pad("polygon points:", 16) + polyPoints);
       if (showPolys) {
-        out.println(indent + "  polygons:");
+        out.println("  polygons:");
         for (int[] face : polyFaces) {
-          out.print(indent + "    ");
+          out.print("    ");
           boolean addSpace = false;
           for (int fVal : face) {
             out.print((addSpace ? " " : "") + fVal );
@@ -499,34 +532,51 @@ public class Cheetah3DParser {
           out.println();
         }
       }
-      out.println(indent + "  " + pad("uvcoords:", 16) + uvcoords.length);
+      out.println("  " + pad("uvcoords:", 16) + uvcoords.length);
       if (showUVs) {
-        out.println(indent + "  uvcoords: (set: " + uvSet + ")");
+        out.println("  uvcoords: (set: " + uvSet + ")");
         for (float[] uvcoord : uvcoords) {
-          out.println(indent + "    " + fmtFloat(uvcoord[0]) + " " + fmtFloat(uvcoord[1]));
+          out.println("    " + fmtFloat(uvcoord[0]) + " " + fmtFloat(uvcoord[1]));
         }
       }
-      out.println(indent + "  " + pad("joints:", 16) + joints.length);
+      out.println("  " + pad("joints:", 16) + joints.length);
       if (showJoints) {
         for (Joint joint : joints) {
-          joint.print(out, indent + "    ");
+          joint.print(out, "    ");
         }
       }
-      if (showHierarchy) {
-        out.println(indent + "  hierarchy:");
-        printHierarchy(rootJoint, out, indent + "    ");
-      }
-      out.println(indent + "  " + pad("weight sets:", 16) + weights.length);
-      out.println(indent + "  " + pad("weight vals:", 16) + weightVals);
+      out.println("  " + pad("weight sets:", 16) + weights.length);
+      out.println("  " + pad("weight vals:", 16) + weightVals);
       if (showWeights) {
         for (int jointIndex = 0; jointIndex < weights.length; jointIndex++) {
           Weight[] weightList = weights[jointIndex];
           // Note: not all joints have weights
           int jointId = indexToId.get(jointIndex);
           String jointName = idToJoint.get(jointId).jointName;
-          out.println(indent + "    joint ID = " + jointId + ", name = '" + jointName + "'");
+          out.println("    joint ID = " + jointId + ", name = '" + jointName + "'");
           for (Weight weight : weightList) {
-            out.println(indent + "      " + weight.index + " " + fmtFloat(weight.weight));
+            out.println("      " + weight.index + " " + fmtFloat(weight.weight));
+          }
+        }
+      }
+      if (showHierarchy) {
+        out.println("  hierarchy:");
+        printHierarchy(rootJoint, out, "    ");
+      }
+      if (showKeyframes) {
+        for (String takeName : takes.keySet()) {
+          Take take = takes.get(takeName);
+          out.println("Take: " + takeName);
+          for (String target : take.keyframes.keySet()) {
+            out.println("  target: " + target);
+            Keyframe[] keyframes = take.keyframes.get(target);
+            for (int ii = 0; ii < keyframes.length; ii++) {
+              Keyframe keyframe = keyframes[ii];
+              out.println("    keyframe: " + ii);
+              out.println("      translate: " + fmtCoord(keyframe.translate));
+              out.println("      rotation:  " + fmtCoord(keyframe.rotation));
+              out.println("      scale:     " + fmtCoord(keyframe.scale));
+            }
           }
         }
       }
@@ -534,9 +584,6 @@ public class Cheetah3DParser {
   }
 
   private void printHierarchy (Joint joint, PrintStream out, String indent) {
-    if (joint == null) {
-      int dum = 0;
-    }
     out.println(indent + joint.jointName);
     for (Joint child : joint.children) {
       if (child != null) {
@@ -699,6 +746,9 @@ public class Cheetah3DParser {
             showPolys = showMaterials = showVertices = showPolys = showUVs = showWeights = showJoints = showHierarchy =
                         showKeyframes = true;
             break;
+          default:
+            System.out.println("Invalid switch: " + arg);
+            System.exit(1);
           }
         } else {
           inFile = arg;
@@ -712,7 +762,7 @@ public class Cheetah3DParser {
       if (inFile != null && (off = inFile.toLowerCase().indexOf(".jas")) > 0) {
         File file = new File(inFile);
         if (file.exists()) {
-          if (consoleOut || !showRaw) {
+          if (consoleOut || (!showRaw && outFile == null)) {
             out = System.out;
           } else {
             if (outFile == null) {
@@ -772,8 +822,8 @@ public class Cheetah3DParser {
             }
             // Print Polygons
             for (Polygon polygon : polygons) {
-              out.println("Polygon: '" + polygon.name + "'");
-              polygon.print(out, "");
+              out.println("Polygon: '" + polygon.polygonName + "'");
+              polygon.print(out);
             }
           }
         } else {
@@ -812,7 +862,7 @@ public class Cheetah3DParser {
         polygon = new Polygon(objName, objDict);
         polygons.add(polygon);
         // Extract and reorder animation keyframes, if any
-        processKeyframes(objDict, polygon);
+        //processKeyframes(objDict, polygon);
       } else if ("FOLDER".equals(objType)) {
         out.println(indent + objType + ": '" + objName + "'");
         processObjects(((NSArray) objDict.get("childs")).getArray(), polygon, indent + "  ");
@@ -828,8 +878,6 @@ public class Cheetah3DParser {
           float[] rotation = getFloatArray(objDict, "rotation");
           float[] scale = getFloatArray(objDict, "scale");
           joint.setInfo(objName, translate, rotation, scale);
-          polygon.idToJointName.put(id, objName);
-          polygon.nameToJointId.put(objName, id);
           NSObject[] children = ((NSArray) objDict.get("childs")).getArray();
           Joint[] childJoints = new Joint[children.length];
           for (int ii = 0; ii < children.length; ii++) {
@@ -840,7 +888,7 @@ public class Cheetah3DParser {
           joint.sethildren(childJoints);
         }
         // Extract and reorder animation keyframes, if any
-        processKeyframes(objDict, polygon);
+        processKeyframes(objDict, polygon, joint);
         processObjects(((NSArray) objDict.get("childs")).getArray(), polygon, indent + "  ");
       } else if ("CAMERA".equals(objType)) {
         // Not used
@@ -848,11 +896,7 @@ public class Cheetah3DParser {
     }
   }
 
-  private void processSkeleton (NSDictionary objDict, Polygon polygon) {
-
-  }
-
-  private void processKeyframes (NSDictionary objDict, Polygon polygon) {
+  private void processKeyframes (NSDictionary objDict, Polygon polygon, Joint joint) {
     if (objDict.containsKey("tracks2")) {
       Map<String, List<Float[][]>> takeMap = new LinkedHashMap<>();
       NSObject[] tracks2 = ((NSArray) objDict.get("tracks2")).getArray();
@@ -892,39 +936,45 @@ public class Cheetah3DParser {
           }
         }
       }
-      if (showJoints && showKeyframes) {
-        // Print Keyframes (if we're also printing joint info)
-        String[] parmNames = new String[] {"position", "rotation", "scale"};
+      if (showKeyframes) {
+        // Get Keyframes
         for (String key : takeMap.keySet()) {
-          //out.println(indent + "  Take: " + key);
           List<Float[][]> tList = takeMap.get(key);
-          int num = 0;
-          for (Float[][] keyframe : tList) {
-            //out.println(indent + "    keyframe: " + num++);
-            for (int ii = 0; ii < keyframe.length; ii++) {
-              String parmName = parmNames[ii];
-              Float[] val = keyframe[ii];
-              // Filling any missing values
-              if (val[0] == null || val[1] == null || val[2] == null) {
-                if ("scale".equals(parmName)) {
-                  val = new Float[] {1.0f, 1.0f, 1.0f};
+          if (tList.size() > 0) {
+            Take take = polygon.getTake(key);
+            String target = joint != null ? joint.jointName : polygon.polygonName;
+            Keyframe[] kfArray = new Keyframe[tList.size()];
+            for (int idx = 0; idx < tList.size(); idx++) {
+              Float[][] keyframe = tList.get(idx);
+              float[] position = new float[] {0, 0, 0};
+              float[] rotation = new float[] {0, 0, 0};
+              float[] scale = new float[] {1, 1, 1};
+              for (int ii = 0; ii < keyframe.length; ii++) {
+                float[] fVal = new float[3];
+                for (int jj = 0; jj < fVal.length; jj++) {
+                  Float val = keyframe[ii][jj];
+                  if (val != null) {
+                    fVal[jj] = val;
+                  }
+                }
+                if (ii == 0) {
+                  position = fVal;
+                } else if (ii == 1) {
+                  rotation = fVal;
                 } else {
-                  val = new Float[] {0.0f, 0.0f, 0.0f};
+                  scale = fVal;
                 }
               }
-              //out.println(indent + "      " + pad(parmName + ": ", 10) + fmtCoord(val));
+              kfArray[idx] = new Keyframe(position, rotation, scale);
             }
+            take.addKeyframes(target, kfArray);
           }
         }
       }
     }
   }
 
-  private String fmtCoord (float[] val) {
-    return fmtFloat(val[0]) + " " + fmtFloat(val[1]) + " " + fmtFloat(val[2]);
-  }
-
-  private String fmtCoord (Float[] val) {
+  private static String fmtCoord (float[] val) {
     return fmtFloat(val[0]) + " " + fmtFloat(val[1]) + " " + fmtFloat(val[2]);
   }
 
@@ -936,7 +986,7 @@ public class Cheetah3DParser {
     return strBuilder.toString();
   }
 
-  private String floatArrayToString (float[] ary) {
+  private static String fmtARGB (float[] ary) {
     return fmtFloat(ary[0]) + " " + fmtFloat(ary[1]) + " " + fmtFloat(ary[2]) + " " + fmtFloat(ary[3]);
   }
 
@@ -1243,7 +1293,7 @@ public class Cheetah3DParser {
     return buf.toString();
   }
 
-  private String fmtFloat (float fVal) {
+  private static String fmtFloat (float fVal) {
     fVal = fVal == -0 ? 0 : fVal;
     if (Math.abs(fVal) > 100000) {
       return String.format((fVal >= 0 ? " %e" : "%e"), fVal);
