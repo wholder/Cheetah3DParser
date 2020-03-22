@@ -15,9 +15,9 @@ where `<filename>` is the name of a `.jas` file in the same directory.  In respo
  ```
 Takes:
   'mixamo.com'
-currentTake: 'mixamo.com'
-Material: 'dreyar_M', index = 0
-Polygon: 'Dreyar'
+CurrentTake:    'mixamo.com'
+Material0:      'dreyar_M'
+Polygon:        'Dreyar'
   Material:       'dreyar_M'
   vertexcount:    7397
   polygon faces:  7428

@@ -560,7 +560,7 @@ public class Cheetah3DParser {
         }
       }
       if (showJointHierarchy) {
-        out.println("  hierarchy:");
+        out.println("  joint hierarchy:");
         printHierarchy(rootJoint, out, "    ");
       }
       if (showKeyframes) {
