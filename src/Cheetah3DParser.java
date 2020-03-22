@@ -169,9 +169,9 @@ public class Cheetah3DParser {
   private boolean                 showVertices  = false;
   private boolean                 showUVs       = false;
   private boolean                 showWeights   = false;
-  private boolean                 showJoints    = false;
-  private boolean                 showHierarchy = false;
-  private boolean                 showKeyframes = false;
+  private boolean showJoints         = false;
+  private boolean showJointHierarchy = false;
+  private boolean showKeyframes      = false;
   private PrintStream             out = System.out;
   private Map<String, Integer>    parmOrder = new HashMap<>();
   private Map<Integer, Material>  idToMaterial = new LinkedHashMap<>();
@@ -559,7 +559,7 @@ public class Cheetah3DParser {
           }
         }
       }
-      if (showHierarchy) {
+      if (showJointHierarchy) {
         out.println("  hierarchy:");
         printHierarchy(rootJoint, out, "    ");
       }
@@ -725,7 +725,7 @@ public class Cheetah3DParser {
             showJoints = true;
             break;
           case "hierarchy":
-            showHierarchy = true;
+            showJointHierarchy = true;
             break;
           case "keyframes":
             showKeyframes = true;
@@ -743,7 +743,7 @@ public class Cheetah3DParser {
             suppressId = true;   // Raw mode only
             break;
           case "all":
-            showPolys = showMaterials = showVertices = showPolys = showUVs = showWeights = showJoints = showHierarchy =
+            showPolys = showMaterials = showVertices = showPolys = showUVs = showWeights = showJoints = showJointHierarchy =
                         showKeyframes = true;
             break;
           default:
