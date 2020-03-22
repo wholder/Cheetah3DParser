@@ -43,7 +43,7 @@ Switch | Function
 `-weights` | list joint to vertex weighting values for each polygon 
 `-joints` | list the Joints for each polygon
 `-hierarchy` | list the Joint hierarchy for each polygon
-`-keyframes` | list the keyframes for each polygon (coming soon)
+`-keyframes` | list the keyframes for each polygon
 `-all` | list all information for each polygon (see note 3)
 `-con` | redirect output to the console
 `-raw` | See section: "Cheetah3DParser.s "raw" mode"
