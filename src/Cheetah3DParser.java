@@ -805,7 +805,7 @@ public class Cheetah3DParser {
                 out.println("  '" + take.get("name") + "'");
               }
               if (takesDict.containsKey("currentTake")) {
-                out.println("currentTake: '" + getString(takesDict, "currentTake") + "'");
+                out.println(pad("CurrentTake:", 16) +  "'" + getString(takesDict, "currentTake") + "'");
               }
             }
             // Process Materials
@@ -815,14 +815,14 @@ public class Cheetah3DParser {
             processObjects(objects, null, "  ");
             // Print Materials
             for (Material material : materials) {
-              out.println("Material: '" + material.getName() + "', index = " + material.index);
+              out.println(pad("Material" + material.index + ":", 16) + "'" + material.getName() + "'");
               if (showMaterials) {
                 material.print(out, "  ");
               }
             }
             // Print Polygons
             for (Polygon polygon : polygons) {
-              out.println("Polygon: '" + polygon.polygonName + "'");
+              out.println(pad("Polygon:", 16) + "'" + polygon.polygonName + "'");
               polygon.print(out);
             }
           }
