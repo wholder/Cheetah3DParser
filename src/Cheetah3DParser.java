@@ -169,6 +169,7 @@ public class Cheetah3DParser {
   private boolean                 showVertices  = false;
   private boolean                 showUVs       = false;
   private boolean                 showWeights   = false;
+  private boolean                 exportObj = false;
   private boolean showJoints         = false;
   private boolean showJointHierarchy = false;
   private boolean showKeyframes      = false;
@@ -539,27 +540,31 @@ public class Cheetah3DParser {
           out.println("    " + fmtFloat(uvcoord[0]) + " " + fmtFloat(uvcoord[1]));
         }
       }
-      out.println("  " + pad("joints:", 16) + joints.length);
-      if (showJoints) {
-        for (Joint joint : joints) {
-          joint.print(out, "    ");
-        }
-      }
-      out.println("  " + pad("weight sets:", 16) + weights.length);
-      out.println("  " + pad("weight vals:", 16) + weightVals);
-      if (showWeights) {
-        for (int jointIndex = 0; jointIndex < weights.length; jointIndex++) {
-          Weight[] weightList = weights[jointIndex];
-          // Note: not all joints have weights
-          int jointId = indexToId.get(jointIndex);
-          String jointName = idToJoint.get(jointId).jointName;
-          out.println("    joint ID = " + jointId + ", name = '" + jointName + "'");
-          for (Weight weight : weightList) {
-            out.println("      " + weight.index + " " + fmtFloat(weight.weight));
+      if (joints != null) {
+        out.println("  " + pad("joints:", 16) + joints.length);
+        if (showJoints) {
+          for (Joint joint : joints) {
+            joint.print(out, "    ");
           }
         }
       }
-      if (showJointHierarchy) {
+      if (weights != null) {
+        out.println("  " + pad("weight sets:", 16) + weights.length);
+        out.println("  " + pad("weight vals:", 16) + weightVals);
+        if (showWeights) {
+          for (int jointIndex = 0; jointIndex < weights.length; jointIndex++) {
+            Weight[] weightList = weights[jointIndex];
+            // Note: not all joints have weights
+            int jointId = indexToId.get(jointIndex);
+            String jointName = idToJoint.get(jointId).jointName;
+            out.println("    joint ID = " + jointId + ", name = '" + jointName + "'");
+            for (Weight weight : weightList) {
+              out.println("      " + weight.index + " " + fmtFloat(weight.weight));
+            }
+          }
+        }
+      }
+      if (showJointHierarchy && rootJoint != null) {
         out.println("  joint hierarchy:");
         printHierarchy(rootJoint, out, "    ");
       }
@@ -746,6 +751,9 @@ public class Cheetah3DParser {
             showPolys = showMaterials = showVertices = showPolys = showUVs = showWeights = showJoints = showJointHierarchy =
                         showKeyframes = true;
             break;
+          case "obj":
+            exportObj = true;
+            break;
           default:
             System.out.println("Invalid switch: " + arg);
             System.exit(1);
@@ -762,17 +770,16 @@ public class Cheetah3DParser {
       if (inFile != null && (off = inFile.toLowerCase().indexOf(".jas")) > 0) {
         File file = new File(inFile);
         if (file.exists()) {
-          if (consoleOut || (!showRaw && outFile == null)) {
-            out = System.out;
-          } else {
-            if (outFile == null) {
-              outFile = inFile.substring(0, off) + ".txt";
-            }
-            BufferedOutputStream bOut = new BufferedOutputStream(new FileOutputStream(new File(outFile)));
-            out = new PrintStream(bOut);
-          }
+          String fileName = inFile.substring(0, off);
           NSDictionary rootDict = (NSDictionary) PropertyListParser.parse(file);
           if (showRaw) {
+            if (outFile == null) {
+              outFile = fileName + ".txt";
+            }
+            if (!consoleOut) {
+              BufferedOutputStream bOut = new BufferedOutputStream(new FileOutputStream(new File(outFile)));
+              out = new PrintStream(bOut);
+            }
             // Dump indented text representation of file
             for (String key : rootDict.allKeys()) {
               NSObject obj = rootDict.get(key);
@@ -795,35 +802,72 @@ public class Cheetah3DParser {
               }
             }
           } else {
-            // List available animation takes
-            NSDictionary takesDict = (NSDictionary) rootDict.get("Takes");
-            NSObject[] takes = ((NSArray) takesDict.get("takes")).getArray();
-            if (takes.length > 0) {
-              out.println("Takes:");
-              for (NSObject nsObject : takes) {
-                NSDictionary take = (NSDictionary) nsObject;
-                out.println("  '" + take.get("name") + "'");
-              }
-              if (takesDict.containsKey("currentTake")) {
-                out.println(pad("CurrentTake:", 16) +  "'" + getString(takesDict, "currentTake") + "'");
-              }
+            if (exportObj) {
+              outFile = fileName + ".obj";
+            }
+            if (outFile != null) {
+              BufferedOutputStream bOut = new BufferedOutputStream(new FileOutputStream(new File(outFile)));
+              out = new PrintStream(bOut);
             }
             // Process Materials
             materials = getMaterials(rootDict);
             // Process Objects
             NSObject[] objects = ((NSArray) rootDict.get("Objects")).getArray();
             processObjects(objects, null, "  ");
-            // Print Materials
-            for (Material material : materials) {
-              out.println(pad("Material" + material.index + ":", 16) + "'" + material.getName() + "'");
-              if (showMaterials) {
-                material.print(out, "  ");
+            if (exportObj) {
+              out.println("# WaveFront *.obj file (generated by Cheetah3DParser)\n");
+              if (materials.size() > 0) {
+                out.println("mtllib " + fileName + ".mtl\n");
               }
-            }
-            // Print Polygons
-            for (Polygon polygon : polygons) {
-              out.println(pad("Polygon:", 16) + "'" + polygon.polygonName + "'");
-              polygon.print(out);
+              for (Polygon polygon : polygons) {
+                // Export polygon vertices
+                out.println("g " + polygon.polygonName);
+                for (float[] vert : polygon.vertices) {
+                  out.println("v " + fmtCoord(vert));
+                }
+                out.println();
+                // Condense texture coords
+                Map<Integer,Integer> txMap = new HashMap<>();
+                List<Integer> txCoords = new ArrayList<>();
+                int txIndex = 0;
+                for (int ii = 0; ii < polygon.polyFaces.length; ii++) {
+                  int[] face = polygon.polyFaces[ii];
+                  for (int vidx : face) {
+                    if (!txMap.containsKey(vidx)) {
+                      txMap.put(txIndex++, ii);
+                    }
+                    txCoords.add(txMap.get(vidx));
+                  }
+                }
+                int dum = 0;
+                // "f v1/vt1/vn1 v2/vt2/vn2 v3/vt3/vn3"
+              }
+            } else {
+              // List available animation takes
+              NSDictionary takesDict = (NSDictionary) rootDict.get("Takes");
+              NSObject[] takes = ((NSArray) takesDict.get("takes")).getArray();
+              if (takes.length > 0) {
+                out.println("Takes:");
+                for (NSObject nsObject : takes) {
+                  NSDictionary take = (NSDictionary) nsObject;
+                  out.println("  '" + take.get("name") + "'");
+                }
+                if (takesDict.containsKey("currentTake")) {
+                  out.println(pad("CurrentTake:", 16) +  "'" + getString(takesDict, "currentTake") + "'");
+                }
+              }
+              // Print Materials
+              for (Material material : materials) {
+                out.println(pad("Material" + material.index + ":", 16) + "'" + material.getName() + "'");
+                if (showMaterials) {
+                  material.print(out, "  ");
+                }
+              }
+              // Print Polygons
+              for (Polygon polygon : polygons) {
+                out.println(pad("Polygon:", 16) + "'" + polygon.polygonName + "'");
+                polygon.print(out);
+              }
             }
           }
         } else {
