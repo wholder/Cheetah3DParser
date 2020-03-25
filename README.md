@@ -44,7 +44,9 @@ Switch | Function
 ***`-hierarchy`*** | list the Joint hierarchy for each polygon
 ***`-keyframes`*** | list the keyframes for each polygon
 ***`-all`*** | list all information for each polygon (see note 3)
-***`-con`*** | redirect output to the console
+***`-obj`*** | generate ***`.obj`*** and ***`.mtl`*** file from ***`.jas`*** file
+***`-flipv`*** | if ***`.obj`*** switch enabled, reverses V value UC coords
+***`-con`*** | redirect output to the console (only for "raw" mode)
 ***`-raw`*** | See section: "Cheetah3DParser's "raw" mode"
 ***`-sid`*** | See section: "Cheetah3DParser's "raw" mode"
 ***`-hex`*** | See section: "Cheetah3DParser's "raw" mode"
