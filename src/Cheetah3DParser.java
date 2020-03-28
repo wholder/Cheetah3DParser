@@ -1122,7 +1122,14 @@ public class Cheetah3DParser {
               float[] rotation = new float[] {0, 0, 0};
               float[] scale = new float[] {1, 1, 1};
               for (int ii = 0; ii < keyframe.length; ii++) {
-                float[] fVal = new float[3];
+                float[] fVal;
+                if (ii == 0) {
+                  fVal = new float[] {0, 0, 0};
+                } else if (ii == 1) {
+                  fVal = new float[] {0, 0, 0};
+                } else {
+                  fVal = new float[] {1, 1, 1};
+                }
                 for (int jj = 0; jj < fVal.length; jj++) {
                   Float val = keyframe[ii][jj];
                   if (val != null) {
