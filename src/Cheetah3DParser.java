@@ -159,6 +159,7 @@ import java.util.*;
  */
 
 public class Cheetah3DParser {
+  private static Map<String, Integer>  parmOrder = new HashMap<>();
   private static DecimalFormat    df = new DecimalFormat("0.000000");
   private boolean                 consoleOut;
   private boolean                 suppressId;
@@ -171,16 +172,15 @@ public class Cheetah3DParser {
   private boolean                 showWeights   = false;
   private boolean                 exportObj = false;
   private boolean                 vFlip = false;
-  private boolean showJoints         = false;
-  private boolean showJointHierarchy = false;
-  private boolean showKeyframes      = false;
+  private boolean                 showJoints         = false;
+  private boolean                 showJointHierarchy = false;
+  private boolean                 showKeyframes      = false;
   private PrintStream             out = System.out;
-  private Map<String, Integer>    parmOrder = new HashMap<>();
   private Map<Integer, Material>  idToMaterial = new LinkedHashMap<>();
   private List<Polygon>           polygons = new ArrayList<>();
   private List<Material>          materials = new ArrayList<>();
 
-  {
+  static {
     parmOrder.put("position", 0);
     parmOrder.put("rotation", 1);
     parmOrder.put("scale", 2);
@@ -194,9 +194,9 @@ public class Cheetah3DParser {
     private boolean       reflFresnel, transUseAlpha;
     private String[]      bumpTypes = new String[] {"bumpHeight", "bumpNormalYPlus", "bumpNormalYMinus"};
     private String[]      filterTypes = new String[] {"Off", "Bilinear", "Trilinear", "Anisotropic"};
-    private  String[]      sampleTypes = new String[] {"UV1", "UV2"};
+    private String[]      sampleTypes = new String[] {"UV1", "UV2"};
     private List<Texture>       textures = new ArrayList<>();
-   private Map<String,Texture>  idToTexture = new HashMap<>();
+    private Map<String,Texture>  idToTexture = new HashMap<>();
 
     Material (int index, String name, int id) {
       this.index = index;
@@ -321,8 +321,11 @@ public class Cheetah3DParser {
 
     private void printMatrix (PrintStream out, String indent, float[] mat) {
       for (int ii = 0; ii < mat.length; ii += 4) {
-        out.println(indent + fmtFloat(mat[ii]) + " " + fmtFloat(mat[ii +1]) + " " + fmtFloat(mat[ii +2]));
-
+        float c0 = mat[ii];
+        float c1 = mat[ii + 1];
+        float c2 = mat[ii + 2];
+        float c3 = mat[ii + 3];
+        out.println(indent + fmtFloat(c0) + " " + fmtFloat(c1) + " " + fmtFloat(c2) + " " + fmtFloat(c3));
       }
     }
 
@@ -336,10 +339,37 @@ public class Cheetah3DParser {
       this.bindPoseS = bindPoseS;
     }
 
+    private float[] flipMatrix (float[] mat) {
+      if (mat.length != 16) {
+        throw new IllegalStateException("Matrix not 4x4");
+      }
+      float[] out = new float[mat.length];
+      out[0] = mat[0];
+      out[4] = mat[1];
+      out[8] = mat[2];
+      out[12] = mat[3];
+
+      out[1] = mat[4];
+      out[5] = mat[5];
+      out[9] = mat[6];
+      out[13] = mat[7];
+
+      out[2] = mat[8];
+      out[6] = mat[9];
+      out[10] = mat[10];
+      out[14] = mat[11];
+
+      out[3] = mat[12];
+      out[7] = mat[13];
+      out[11] = mat[14];
+      out[15] = mat[15];
+      return out;
+    }
+
     void setMatrices (float[] transformMatrix, float[] transformAssociateModelMatrix, float[] transformLinkMatrix) {
-      this.transformMatrix = transformMatrix;
-      this.transformAssociateModelMatrix = transformAssociateModelMatrix;
-      this.transformLinkMatrix = transformLinkMatrix;
+      this.transformMatrix = flipMatrix(transformMatrix);
+      this.transformAssociateModelMatrix = flipMatrix(transformAssociateModelMatrix);
+      this.transformLinkMatrix = flipMatrix(transformLinkMatrix);
     }
 
     void setInfo (String jointName, float[] translate, float[] rotation, float[] scale) {
@@ -910,7 +940,7 @@ public class Cheetah3DParser {
                   out.println("usemtl default");
                 }
                 // Compute and export vertex normals
-                if (true) {
+                if (false) {
                   for (int[] points : polygon.polyFaces) {
                     // Visit points in reverse order points for Obj format
                     for (int ii = points.length - 1; ii >= 0; ii--) {
