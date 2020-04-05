@@ -924,7 +924,7 @@ public class Cheetah3DParser {
                 List<Integer> reMap = new ArrayList<>();
                 for (int ii = 0; ii < polygon.uvcoords.length; ii++) {
                   String uvStr = fmtUV(polygon.uvcoords[ii]);
-                  if (txMap.containsKey(uvStr)) {
+                  if (false && txMap.containsKey(uvStr)) {
                     int idx = txMap.get(uvStr);
                     reMap.add(idx);
                   } else {
@@ -938,15 +938,6 @@ public class Cheetah3DParser {
                   out.println("usemtl " + polygon.material.getName());
                 } else {
                   out.println("usemtl default");
-                }
-                // Compute and export vertex normals
-                if (false) {
-                  for (int[] points : polygon.polyFaces) {
-                    // Visit points in reverse order points for Obj format
-                    for (int ii = points.length - 1; ii >= 0; ii--) {
-                      int point = points[ii];
-                    }
-                  }
                 }
                 // Export polygon faces section
                 // with vertex normals: "f v1/vt1/vn1 v2/vt2/vn2 v3/vt3/vn3" or without: "f v1/vt1 v2/vt2 v3/vt3"
