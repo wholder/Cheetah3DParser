@@ -911,27 +911,23 @@ public class Cheetah3DParser {
               }
               matOut.flush();
               matOut.close();
+              int vertexIndex = 0;
+              int coordsIndex = 0;
               for (Polygon polygon : polygons) {
+                // Alpha_Surface or Alpha_Joints
+                //if ("Alpha_Surface".endsWith(polygon.polygonName)) {
+                //  continue;
+                //}
                 // Export polygon vertices section
                 out.println("g " + polygon.polygonName);
                 for (float[] vert : polygon.vertices) {
                   out.println("v " + fmtCoord(vert));
                 }
                 out.println();
-                int pCount = 0;
-                // Condense and export texture coords section
-                Map<String,Integer> txMap = new LinkedHashMap<>();
-                List<Integer> reMap = new ArrayList<>();
+                // Export texture coords section
                 for (int ii = 0; ii < polygon.uvcoords.length; ii++) {
                   String uvStr = fmtUV(polygon.uvcoords[ii]);
-                  if (false && txMap.containsKey(uvStr)) {
-                    int idx = txMap.get(uvStr);
-                    reMap.add(idx);
-                  } else {
-                    txMap.put(uvStr, pCount);
-                    out.println("vt " + uvStr);
-                    reMap.add(pCount++);
-                  }
+                  out.println("vt " + uvStr);
                 }
                 out.println();
                 if (polygon.material != null) {
@@ -941,13 +937,12 @@ public class Cheetah3DParser {
                 }
                 // Export polygon faces section
                 // with vertex normals: "f v1/vt1/vn1 v2/vt2/vn2 v3/vt3/vn3" or without: "f v1/vt1 v2/vt2 v3/vt3"
-                int pointCount = 0;
                 for (int[] points : polygon.polyFaces) {
                   out.print("f ");
                   int[][] tmp = new int[points.length][2];
                   for (int ii = 0; ii < points.length; ii++) {
-                    tmp[ii][0] = points[ii] + 1;
-                    tmp[ii][1] = reMap.get(pointCount++) + 1;
+                    tmp[ii][0] = vertexIndex + points[ii] + 1;
+                    tmp[ii][1] = coordsIndex++ + 1;
                   }
                   // Visit points in reverse order points for Obj format
                   for (int ii = points.length - 1; ii >= 0; ii--) {
@@ -955,6 +950,8 @@ public class Cheetah3DParser {
                   }
                   out.println();
                 }
+                out.println();
+                vertexIndex += polygon.vertices.length;
               }
             } else {
               // List available animation takes
@@ -1004,9 +1001,8 @@ public class Cheetah3DParser {
 
   private static Node getChildNode (Node node, String name) {
     NodeList children = node.getChildNodes();
-    int len = children.getLength();
-    for (int ii = 0; ii < len; ii++) {
-      Node child = children.item(ii);
+    if (children.getLength() > 0) {
+      Node child = children.item(0);
       String cName = child.getNodeName();
       if (cName.equals(name)) {
         return child;
@@ -1158,6 +1154,9 @@ public class Cheetah3DParser {
   }
 
   private static String fmtCoord (float[] val) {
+    if (val == null) {
+      return "null";
+    }
     return fmtFloat(val[0]) + " " + fmtFloat(val[1]) + " " + fmtFloat(val[2]);
   }
 
